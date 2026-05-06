@@ -4,6 +4,7 @@ import ChatbotIcon from "./components/ChatbotIcon";
 const BACKEND_BASE = "http://127.0.0.1:8000";
 const CHAT_URL = `${BACKEND_BASE}/chat`;
 const REQUEST_TIMEOUT_MS = 180000;
+
 function cleanBotAnswer(answer) {
   const text = (answer || "").trim();
   return text || "Geen antwoord ontvangen.";
@@ -15,55 +16,66 @@ function App() {
   const [loading, setLoading] = useState(false);
 
   const chatBodyRef = useRef(null);
-  const hasStarted = useRef(false); 
+  const hasStarted = useRef(false);
 
   useEffect(() => {
     if (chatBodyRef.current) {
-      chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
+      chatBodyRef.current.scrollTop =
+        chatBodyRef.current.scrollHeight;
     }
   }, [messages, loading]);
 
   useEffect(() => {
     if (hasStarted.current) return;
     hasStarted.current = true;
-
-    setMessages([
-      {
-        sender: "bot",
-        text:
-          "Hallo! 👋\n\nWaarmee kan ik je helpen?\n\nHeb je een vraag over track & trace of een andere interne vraag?",
-      },
-    ]);
   }, []);
 
   function addBot(t) {
-    setMessages((prev) => [...prev, { sender: "bot", text: t }]);
+    setMessages((prev) => [
+      ...prev,
+      { sender: "bot", text: t },
+    ]);
   }
 
   function addUser(t) {
-    setMessages((prev) => [...prev, { sender: "user", text: t }]);
+    setMessages((prev) => [
+      ...prev,
+      { sender: "user", text: t },
+    ]);
   }
 
   async function sendToBackend(question) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    const timeout = setTimeout(
+      () => controller.abort(),
+      REQUEST_TIMEOUT_MS
+    );
 
     try {
       const res = await fetch(CHAT_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: question }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: question,
+        }),
         signal: controller.signal,
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error("Backend fout");
+
+      if (!res.ok) {
+        throw new Error("Backend fout");
+      }
 
       return cleanBotAnswer(data?.answer);
     } catch (err) {
       if (err?.name === "AbortError") {
         return "Backend duurde te lang (timeout).";
       }
+
       return "Er ging iets mis.";
     } finally {
       clearTimeout(timeout);
@@ -72,11 +84,15 @@ function App() {
 
   async function handleUserSend(input) {
     if (loading) return;
+
     const msg = (input || "").trim();
+
     if (!msg) return;
 
     setLoading(true);
+
     addUser(msg);
+
     setText("");
 
     try {
@@ -95,6 +111,8 @@ function App() {
   return (
     <div className="container">
       <div className="chatbot-popup">
+
+        {/* Header */}
         <div className="chat-header">
           <div className="header-info">
             <ChatbotIcon />
@@ -102,7 +120,49 @@ function App() {
           </div>
         </div>
 
+        {/* Chat body */}
         <div className="chat-body" ref={chatBodyRef}>
+
+          {/* Welkomstbericht */}
+          <div className="message-bot-message">
+            <ChatbotIcon />
+
+        
+          </div>
+
+          {/* Optie bubbles */}
+          <div className="vraag-container">
+
+            <div
+              className="message-option-bubble"
+              onClick={() =>
+                handleUserSend("Algemene vraag")
+              }
+            >
+              Algemene vraag
+            </div>
+
+            <div
+              className="message-option-bubble"
+              onClick={() =>
+                handleUserSend("Track & Trace")
+              }
+            >
+              Track & Trace
+            </div>
+
+            <div
+              className="message-option-bubble"
+              onClick={() =>
+                handleUserSend("Interne Vraag")
+              }
+            >
+              Interne Vraag
+            </div>
+
+          </div>
+
+          {/* Chat berichten */}
           {messages.map((msg, index) => (
             <div
               key={index}
@@ -112,16 +172,26 @@ function App() {
                   : "message-bot-message"
               }
             >
-              {msg.sender === "bot" && <ChatbotIcon />}
-              <p className="message-text" style={{ whiteSpace: "pre-wrap" }}>
+              {msg.sender === "bot" && (
+                <ChatbotIcon />
+              )}
+
+              <p
+                className="message-text"
+                style={{
+                  whiteSpace: "pre-wrap",
+                }}
+              >
                 {msg.text}
               </p>
             </div>
           ))}
 
+          {/* Loading dots */}
           {loading && (
             <div className="message-bot-message">
               <ChatbotIcon />
+
               <p className="message-text typing">
                 <span></span>
                 <span></span>
@@ -129,18 +199,26 @@ function App() {
               </p>
             </div>
           )}
+
         </div>
 
+        {/* Footer */}
         <div className="chat-footer">
-          <form onSubmit={sendMessage} className="chat-form">
+          <form
+            onSubmit={sendMessage}
+            className="chat-form"
+          >
             <input
               type="text"
               placeholder="Typ je bericht..."
               className="message-input"
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) =>
+                setText(e.target.value)
+              }
               disabled={loading}
             />
+
             <button
               className="material-symbols-rounded"
               disabled={loading}
@@ -151,6 +229,7 @@ function App() {
             </button>
           </form>
         </div>
+
       </div>
     </div>
   );

@@ -206,6 +206,46 @@ body{
   animation-delay: 0.30s;
 }
 
+.vraag-container{
+    display: flex;
+    gap: 10px;
+    margin-left: 46px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.message-option-bubble{
+    background: #b2f77d;
+    color: black;
+    padding: 12px 18px;
+    border-radius: 20px;
+    width: fit-content;
+    cursor: pointer;
+    border: 1px solid #8bd85c;
+    transition: 0.2s ease;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.message-option-bubble{
+    background: #b2f77d;
+    color: black;
+    padding: 12px 18px;
+    border-radius: 20px;
+    width: fit-content;
+    cursor: pointer;
+    border: 1px solid #8bd85c;
+    transition: 0.2s ease;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.message-option-bubble:hover{
+    background: #2d8001;
+    transform: scale(1.03);
+}
+
+
 @keyframes typingDots{
   0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
   40%          { transform: translateY(-6px); opacity: 1; }
