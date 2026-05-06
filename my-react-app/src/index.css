@@ -1,0 +1,212 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,100..900&display=swap');
+
+*{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Inter", sans-serif;
+}
+
+html, body{
+    width: 100%;
+    height: 100%;
+}
+
+body{
+    background: linear-gradient(#193901, #7BC144);
+}
+
+.chatbot-popup{
+    width: 100vw;   
+    height: 100vh;   
+    background: #fff;
+    border-radius: 0;    
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.chatbot-popup .chat-header{
+    display: flex;
+    padding: 15px 22px;
+    align-items: center;
+    justify-content: space-between;
+    background-color: #3e8508;
+}
+
+.chat-header .header-info{
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.header-info svg{
+    height: 35px;
+    width: 35px;
+    padding: 6px;
+    fill: #122703;
+    background: #fff;
+    border-radius: 50%;
+}
+
+.header-info .logo-text{
+    color: #fff;
+    font-size: 1.31rem;
+    font-weight: 600;
+    background-color: transparent;
+}
+
+.vraag1, .vraag2, .vraag3{
+    margin: 10px;
+    display: inline-block;
+    padding: 9px;
+    font-size: 12px;
+    font-weight: 600;
+    width: 30%;
+    background-color: #b2f77d;
+    color: #333;
+    border-radius: 4px;
+    border: 1px solid #000;
+    cursor: pointer;
+    
+}
+
+.vraag1:hover, .vraag2:hover, .vraag3:hover{
+    background-color: #c8fdac;
+    transition: 0.2s ease;
+}
+
+.chat-body{
+    flex: 1;                 
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 15px 22px;
+    background: #f7f7f7;        
+}
+
+.chat-body .message-bot-message{
+    display:flex;
+    gap: 11px;
+    align-items: flex-start;
+}
+
+.chat-body .message-bot-message svg{
+    height: 35px;
+    width: 35px;
+    padding: 6px;
+    fill: #489b08;
+    background: #fff;
+    border-radius: 50%;
+}
+
+.chat-body .message-bot-message .message-text{
+    background: #b2f77d;
+    color: black;
+    padding: 12px 16px;
+    max-width: 70%;
+    border-radius: 13px 13px 13px 3px;
+    margin-top: 10px;
+    white-space: pre-line;
+}
+
+.chat-body .message-user-message{
+    display: flex;
+    justify-content: flex-end;
+}
+
+.chat-body .message-user-message .message-text{
+    background-color: #489b08;
+    color: #ffffff;
+    padding: 12px 16px;
+    max-width: 70%;
+    width: fit-content;
+    border-radius: 13px 13px 3px 13px;
+    margin-top: 10px;
+    white-space: pre-line;
+}
+
+.message-option-bubble{
+    background: #b2f77d;
+    color: black;
+    padding: 12px 16px;
+    border-radius: 13px 13px 13px 3px;
+    width: fit-content;
+    margin: 10px 0;
+    cursor: pointer;
+    border: 1px solid #8bd85c;
+    transition: 0.2s ease;
+}
+
+.message-option-bubble:hover{
+    background: #c8fdac;
+    transform: scale(1.02);
+}
+
+.chat-footer{
+    width: 100%;
+    padding: 10px 20px;
+    background: transparent; 
+}
+
+.chat-footer .chat-form{
+    display: flex;
+    align-items: center;
+    outline: 1px solid #727274;
+    border-radius: 40px;
+    padding: 5px 10px;
+}
+
+.chat-form .message-input{
+    border: none;
+    outline: none;
+    background: transparent; width: 100%;
+    height: 45px;
+    padding: 0 15px;
+    font-size: 0.95rem;
+}
+
+.chat-footer button{
+    background: transparent;
+    height: 35px;
+    width: 35px;
+    border: none;
+    outline: none;
+    font-size: 1.15rem;
+    color: #fff;
+    border-radius: 50%;
+    background:#3e8508;
+    cursor: pointer;
+}
+
+.vraag-container{
+    background-color: transparent;
+}
+
+/* ===== Typing / loading dots ===== */
+.message-text.typing{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px;
+}
+
+.message-text.typing span{
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2f6b00; 
+  display: inline-block;
+  animation: typingDots 1.2s infinite ease-in-out;
+}
+
+.message-text.typing span:nth-child(2){
+  animation-delay: 0.15s;
+}
+.message-text.typing span:nth-child(3){
+  animation-delay: 0.30s;
+}
+
+@keyframes typingDots{
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40%          { transform: translateY(-6px); opacity: 1; }
+}
