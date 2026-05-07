@@ -246,7 +246,7 @@ Output rules:
 
 Correct example:
 employee_lookup|Ranya|Mobile
-```
+
 
 
 
