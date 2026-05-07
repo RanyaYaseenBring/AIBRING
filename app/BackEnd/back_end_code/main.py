@@ -128,6 +128,10 @@ def answer_question(question: str, session_id: str):
 
     state = get_user_state(session_id)
 
+    # =====================================================
+    # ALGEMENE VRAAG
+    # =====================================================
+
     if msg == "Algemene vraag":
 
         prompt = """
@@ -140,7 +144,11 @@ def answer_question(question: str, session_id: str):
 
         answer = response.content.strip()
 
-        append_history(session_id, "user", msg)
+        append_history(
+            session_id,
+            "user",
+            msg
+        )
 
         append_history(
             session_id,
@@ -149,6 +157,10 @@ def answer_question(question: str, session_id: str):
         )
 
         return answer
+
+    # =====================================================
+    # TRACK & TRACE
+    # =====================================================
 
     if msg == "Track & Trace":
 
@@ -173,6 +185,219 @@ def answer_question(question: str, session_id: str):
 
         return tracking_response
 
+    # =====================================================
+    # INTERNE VRAAG
+    # =====================================================
+
+    if msg == "Interne vraag":
+
+        prompt = generate_prompt(
+            "Hallo! Wat is je interne vraag?"
+        )
+
+        response = llm.invoke(prompt)
+
+        answer = response.content.strip()
+
+        append_history(
+            session_id,
+            "user",
+            msg
+        )
+
+        append_history(
+            session_id,
+            "assistant",
+            answer
+        )
+
+        return answer
+
+    # =====================================================
+    # NORMALE TRACKING FLOW
+    # =====================================================
+
+    tracking_response = handle_tracking(
+        msg,
+        engine_track,
+        llm,
+        session_id
+    )
+
+    if tracking_response is not None:
+
+        append_history(
+            session_id,
+            "user",
+            msg
+        )
+
+        append_history(
+            session_id,
+            "assistant",
+            str(tracking_response)
+        )
+
+        return tracking_response
+
+    # =====================================================
+    # CHAT HISTORY
+    # =====================================================
+
+    history = get_history(session_id)
+
+    recent_history = history[-30:]
+
+    formatted_context = ""
+
+    for item in recent_history:
+
+        role_name = (
+            "Gebruiker"
+            if item["role"] == "user"
+            else "Assistent"
+        )
+
+        formatted_context += (
+            f"{role_name}: {item['message']}\n"
+        )
+
+    # =====================================================
+    # MAIN PROMPT
+    # =====================================================
+
+    full_input = (
+        f"Context van het gesprek:\n"
+        f"{formatted_context}\n"
+        f"Nieuwe vraag: {msg}"
+    )
+
+    prompt = generate_prompt(full_input)
+
+    response = llm.invoke(prompt)
+
+    # =====================================================
+    # RESPONSE HANDLING
+    # =====================================================
+
+    if not response or not response.content:
+
+        answer = "Geen antwoord ontvangen."
+
+    else:
+
+        result = response.content.strip()
+
+        # ================================================
+        # LATEST ORDER
+        # ================================================
+
+        if result == "LATEST_ORDER":
+
+            answer = get_latest_order(engine_track)
+
+        # ================================================
+        # EMPLOYEE LOOKUP
+        # ================================================
+
+        elif result.startswith("employee_lookup|"):
+
+            try:
+
+                _, name, field = result.split("|", 2)
+
+                if field == "Address":
+
+                    query = """
+                    SELECT street,
+                           HouseNumber,
+                           ZIPCODE,
+                           Country
+                    FROM afas.Bring_Employees
+                    WHERE FirstName = :name
+                    """
+
+                else:
+
+                    query = f"""
+                    SELECT {field}
+                    FROM afas.Bring_Employees
+                    WHERE FirstName = :name
+                    """
+
+                with engine_emp.connect() as conn:
+
+                    row = conn.execute(
+                        text(query),
+                        {"name": name}
+                    ).fetchone()
+
+                if row:
+
+                    if field == "Address":
+
+                        answer = (
+                            f"{row[0]} {row[1]}, "
+                            f"{row[2]}, {row[3]}"
+                        )
+
+                    else:
+
+                        answer = str(row[0])
+
+                else:
+
+                    answer = (
+                        f"Ik kon geen gegevens vinden "
+                        f"voor {name}."
+                    )
+
+            except:
+
+                answer = (
+                    "Er trad een fout op bij "
+                    "het zoeken naar de medewerker."
+                )
+
+        # ================================================
+        # NORMAAL ANTWOORD
+        # ================================================
+
+        else:
+
+            answer = result
+
+    # =====================================================
+    # SAVE HISTORY
+    # =====================================================
+
+    append_history(
+        session_id,
+        "user",
+        msg
+    )
+
+    append_history(
+        session_id,
+        "assistant",
+        str(answer)
+    )
+
+    return answer
+
+    append_history(
+            session_id,
+            "user",
+            msg
+        )
+
+    append_history(
+            session_id,
+            "assistant",
+            str(tracking_response)
+        )
+
+    return tracking_response
 
     tracking_response = handle_tracking(
         msg,
