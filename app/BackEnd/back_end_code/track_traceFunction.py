@@ -335,10 +335,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
         return f"{response}\n\n{followup}"
 
-    # =================================================
-    # ZIPCODE FLOW
-    # =================================================
-
     if user_state["waiting_for_zipcode"]:
 
         tracking_number = user_state["tracking_number"]
