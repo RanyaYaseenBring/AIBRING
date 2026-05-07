@@ -45,6 +45,7 @@ STRICT RULES:
 - NEVER explain translations.
 - Keep responses short and natural.
 - Output ONLY the final response text.
+- never talk spanish randomly
 
 USER MESSAGE:
 {user_message}
@@ -66,29 +67,16 @@ TASK:
 def classify_tracking_intent(msg, llm):
 
     prompt = f"""
-You are an intent classifier.
-
-Understand the user input in ANY language.
-
-Return EXACTLY one word from this list:
-
-delivery
-reference
-sender_name
-sender_address
-receiver_name
-receiver_address
-full
-tracking
-yes
-no
-unknown
+You are a logistics assistant.
 
 STRICT RULES:
-- No explanations
-- No punctuation
-- No extra text
-- Only return one exact keyword
+- The response language is 
+- NEVER switch languages.
+- NEVER translate.
+- NEVER use multiple languages.
+- Keep responses short and professional.
+- Output ONLY the final response.
+-you NEVER repeat the question if the user answers
 
 User input:
 {msg}
@@ -141,6 +129,7 @@ def should_use_tracking(msg, session_id, llm):
     intent = classify_tracking_intent(msg, llm)
 
     return intent == "tracking"
+
 
 def fetch_tracking_data(
     engine_track,

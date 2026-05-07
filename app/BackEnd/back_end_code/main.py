@@ -2,17 +2,13 @@ import urllib.parse
 import base64
 import json
 import asyncio
-
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
-
 from sqlalchemy import create_engine, text
-
 from langchain_ollama import ChatOllama
 from langchain_community.utilities import SQLDatabase
-
 from ChatBotMemory import save_chat_memory
 from ChatbotPrompt import generate_prompt
 from track_traceFunction import handle_tracking
@@ -127,15 +123,11 @@ def answer_question(question: str, session_id: str):
 
     state = get_user_state(session_id)
 
-    # =====================================================
-    # ALGEMENE VRAAG
-    # =====================================================
-
     if msg == "Algemene vraag":
 
         prompt = """
         De gebruiker wil een algemene vraag stellen.
-
+        je praat in de taal van de gebruiker
         Begroet vriendelijk en vraag waarmee je kan helpen.
         """
 
@@ -156,10 +148,6 @@ def answer_question(question: str, session_id: str):
         )
 
         return answer
-
-    # =====================================================
-    # TRACK & TRACE
-    # =====================================================
 
     if msg == "Track & Trace":
 
@@ -183,10 +171,6 @@ def answer_question(question: str, session_id: str):
         )
 
         return tracking_response
-
-    # =====================================================
-    # INTERNE VRAAG
-    # =====================================================
 
     if msg == "Interne vraag":
 
@@ -212,10 +196,6 @@ def answer_question(question: str, session_id: str):
 
         return answer
 
-    # =====================================================
-    # NORMALE TRACKING FLOW
-    # =====================================================
-
     tracking_response = handle_tracking(
         msg,
         engine_track,
@@ -239,10 +219,6 @@ def answer_question(question: str, session_id: str):
 
         return tracking_response
 
-    # =====================================================
-    # CHAT HISTORY
-    # =====================================================
-
     history = get_history(session_id)
 
     recent_history = history[-30:]
@@ -261,10 +237,6 @@ def answer_question(question: str, session_id: str):
             f"{role_name}: {item['message']}\n"
         )
 
-    # =====================================================
-    # MAIN PROMPT
-    # =====================================================
-
     full_input = (
         f"Context van het gesprek:\n"
         f"{formatted_context}\n"
@@ -275,10 +247,6 @@ def answer_question(question: str, session_id: str):
 
     response = llm.invoke(prompt)
 
-    # =====================================================
-    # RESPONSE HANDLING
-    # =====================================================
-
     if not response or not response.content:
 
         answer = "Geen antwoord ontvangen."
@@ -287,17 +255,9 @@ def answer_question(question: str, session_id: str):
 
         result = response.content.strip()
 
-        # ================================================
-        # LATEST ORDER
-        # ================================================
-
         if result == "LATEST_ORDER":
 
             answer = get_latest_order(engine_track)
-
-        # ================================================
-        # EMPLOYEE LOOKUP
-        # ================================================
 
         elif result.startswith("employee_lookup|"):
 
@@ -357,18 +317,9 @@ def answer_question(question: str, session_id: str):
                     "Er trad een fout op bij "
                     "het zoeken naar de medewerker."
                 )
-
-        # ================================================
-        # NORMAAL ANTWOORD
-        # ================================================
-
         else:
 
             answer = result
-
-    # =====================================================
-    # SAVE HISTORY
-    # =====================================================
 
     append_history(
         session_id,
