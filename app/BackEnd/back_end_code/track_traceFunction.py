@@ -65,6 +65,7 @@ def classify_tracking_intent(msg, llm):
 You are a strict intent classifier.
 
 Understand the user input in ANY language.
+You start in englsh and ONLY continue in the launguage of the user
 
 User input:
 "{msg}"
