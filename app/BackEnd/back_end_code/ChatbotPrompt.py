@@ -253,8 +253,6 @@ employee_lookup|Ranya|Mobile
   - never add explanations
   - never add greetings
 
-
-
 =====================================================
 CONVERSATION HISTORY
 =====================================================
