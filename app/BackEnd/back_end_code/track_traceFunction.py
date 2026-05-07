@@ -1,9 +1,11 @@
+
 from sqlalchemy import text
 from ChatbotPrompt import generate_prompt
 
 session_states = {}
 
 def create_tracking_state():
+
     return {
         "tracking_active": False,
         "tracking_number": None,
@@ -17,60 +19,58 @@ def create_tracking_state():
 
 
 def get_user_state(session_id):
+
     if session_id not in session_states:
+
         session_states[session_id] = create_tracking_state()
+
     return session_states[session_id]
 
 
 def reset_state(session_id):
+
     session_states[session_id] = create_tracking_state()
 
-
-# =====================================================
-# AI RESPONSE HELPER
-# =====================================================
 
 def ai_reply(llm, user_message, instruction):
 
     prompt = f"""
-You are a multilingual logistics assistant.
+You are a logistics assistant.
 
-IMPORTANT:
-- Always answer in the SAME language as the user.
+STRICT RULES:
+- Reply ONLY in the SAME language as the user message.
+- NEVER translate.
+- NEVER use multiple languages.
+- NEVER use brackets.
+- NEVER explain translations.
 - Keep responses short and natural.
-- Be conversational.
-- Never explain your reasoning.
+- Output ONLY the final response text.
 
-User message:
+USER MESSAGE:
 {user_message}
 
-Instruction:
+TASK:
 {instruction}
 """
 
     try:
-        return llm.invoke(prompt).content.strip()
+
+        response = llm.invoke(prompt)
+
+        return response.content.strip()
 
     except Exception:
+
         return instruction
-
-
-# =====================================================
-# INTENT CLASSIFIER
-# =====================================================
 
 def classify_tracking_intent(msg, llm):
 
     prompt = f"""
-You are a strict intent classifier.
+You are an intent classifier.
 
 Understand the user input in ANY language.
-You start in englsh and ONLY continue in the launguage of the user
 
-User input:
-"{msg}"
-
-Return EXACTLY one of:
+Return EXACTLY one word from this list:
 
 delivery
 reference
@@ -84,12 +84,24 @@ yes
 no
 unknown
 
-Only return one word.
-No explanation.
+STRICT RULES:
+- No explanations
+- No punctuation
+- No extra text
+- Only return one exact keyword
+
+User input:
+{msg}
 """
+
     try:
 
-        result = llm.invoke(prompt).content.strip().lower()
+        result = (
+            llm.invoke(prompt)
+            .content
+            .strip()
+            .lower()
+        )
 
         allowed = {
             "delivery",
@@ -108,11 +120,9 @@ No explanation.
         return result if result in allowed else "unknown"
 
     except Exception:
+
         return "unknown"
 
-# =====================================================
-# SHOULD USE TRACKING
-# =====================================================
 
 def should_use_tracking(msg, session_id, llm):
 
@@ -131,11 +141,6 @@ def should_use_tracking(msg, session_id, llm):
     intent = classify_tracking_intent(msg, llm)
 
     return intent == "tracking"
-
-
-# =====================================================
-# FETCH TRACKING DATA
-# =====================================================
 
 
 def fetch_tracking_data(
@@ -390,6 +395,10 @@ def handle_tracking(msg, engine_track, llm, session_id):
         )
 
         return f"{response}\n\n{followup}"
+
+    # =================================================
+    # ZIPCODE FLOW
+    # =================================================
 
     if user_state["waiting_for_zipcode"]:
 
