@@ -3,7 +3,6 @@ from ChatbotPrompt import generate_prompt
 
 session_states = {}
 
-
 def create_tracking_state():
     return {
         "tracking_active": False,
@@ -27,14 +26,96 @@ def reset_state(session_id):
     session_states[session_id] = create_tracking_state()
 
 
-def should_use_tracking(msg, session_id):
+# =====================================================
+# AI RESPONSE HELPER
+# =====================================================
+
+def ai_reply(llm, user_message, instruction):
+
+    prompt = f"""
+You are a multilingual logistics assistant.
+
+IMPORTANT:
+- Always answer in the SAME language as the user.
+- Keep responses short and natural.
+- Be conversational.
+- Never explain your reasoning.
+
+User message:
+{user_message}
+
+Instruction:
+{instruction}
+"""
+
+    try:
+        return llm.invoke(prompt).content.strip()
+
+    except Exception:
+        return instruction
+
+
+# =====================================================
+# INTENT CLASSIFIER
+# =====================================================
+
+def classify_tracking_intent(msg, llm):
+
+    prompt = f"""
+You are a strict intent classifier.
+
+Understand the user input in ANY language.
+
+User input:
+"{msg}"
+
+Return EXACTLY one of:
+
+delivery
+reference
+sender_name
+sender_address
+receiver_name
+receiver_address
+full
+tracking
+yes
+no
+unknown
+
+Only return one word.
+No explanation.
+"""
+    try:
+
+        result = llm.invoke(prompt).content.strip().lower()
+
+        allowed = {
+            "delivery",
+            "reference",
+            "sender_name",
+            "sender_address",
+            "receiver_name",
+            "receiver_address",
+            "full",
+            "tracking",
+            "yes",
+            "no",
+            "unknown"
+        }
+
+        return result if result in allowed else "unknown"
+
+    except Exception:
+        return "unknown"
+
+# =====================================================
+# SHOULD USE TRACKING
+# =====================================================
+
+def should_use_tracking(msg, session_id, llm):
+
     state = get_user_state(session_id)
-    msg_lower = msg.strip().lower()
-
-    tracking_keywords = {"track", "trace", "tracking", "shipment", "package"}
-
-    if any(keyword in msg_lower for keyword in tracking_keywords):
-        return True
 
     if (
         state["tracking_active"]
@@ -46,89 +127,44 @@ def should_use_tracking(msg, session_id):
     ):
         return True
 
-    return False
+    intent = classify_tracking_intent(msg, llm)
+
+    return intent == "tracking"
 
 
-def classify_yes_no(msg, llm):
-    msg_clean = msg.strip().lower()
-
-    if msg_clean in {"yes", "yeah", "yep", "ja", "zeker", "natuurlijk"}:
-        return "yes"
-
-    if msg_clean in {"no", "nope", "nee", "nah"}:
-        return "no"
-
-    try:
-        result = llm.invoke(generate_prompt(msg, mode="yesno")).content.strip().lower()
-
-        if result.startswith("yes"):
-            return "yes"
-
-        if result.startswith("no"):
-            return "no"
-
-        return "unknown"
-
-    except Exception:
-        return "unknown"
-
-
-def classify_tracking_intent(msg, llm):
-    prompt = f"""
-You are a strict intent classifier.
-Understand the user input in ANY language.
-
-User input: "{msg}"
-
-Return EXACTLY one of:
-delivery
-reference
-sender_name
-sender_address
-receiver_name
-receiver_address
-full
-unknown
-
-Only return one word. No explanation.
-"""
-
-    try:
-        result = llm.invoke(prompt).content.strip().lower()
-        allowed = {
-            "delivery",
-            "reference",
-            "sender_name",
-            "sender_address",
-            "receiver_name",
-            "receiver_address",
-            "full",
-            "unknown"
-        }
-        return result if result in allowed else "unknown"
-
-    except Exception:
-        return "unknown"
-
+# =====================================================
+# FETCH TRACKING DATA
+# =====================================================
 
 def fetch_tracking_data(engine_track, tracking_number, include_full=False):
-    tracking_number = tracking_number.replace("-", "").replace(" ", "")
+
+    tracking_number = (
+        tracking_number
+        .replace("-", "")
+        .replace(" ", "")
+    )
 
     if include_full:
+
         sql = text("""
-            SELECT PRIMARYREFERENCE, EXPECTED_DELIVERYDATE, EDIREFERENCE,
-                   L_NAMELINE1, L_ADDRESSLINE1, L_ZIPCODE, L_CITY, L_COUNTRY_FULL,
-                   U_NAMELINE1, U_ADDRESSLINE1, U_ZIPCODE, U_CITY, U_COUNTRY_FULL
+            SELECT PRIMARYREFERENCE,
+                   EXPECTED_DELIVERYDATE,
+                   EDIREFERENCE,
+
+                   L_NAMELINE1,
+                   L_ADDRESSLINE1,
+                   L_ZIPCODE,
+                   L_CITY,
+                   L_COUNTRY_FULL,
+
+                   U_NAMELINE1,
+                   U_ADDRESSLINE1,
+                   U_ZIPCODE,
+                   U_CITY,
+                   U_COUNTRY_FULL
+
             FROM [BRING].[v_dossiers]
-            WHERE
-                REPLACE(REPLACE(CAST(PRIMARYREFERENCE AS NVARCHAR(100)), '-', ''), ' ', '') LIKE :tracking
-                OR REPLACE(REPLACE(CAST(EDIREFERENCE AS NVARCHAR(100)), '-', ''), ' ', '') LIKE :tracking
-                OR REPLACE(REPLACE(CAST(INTERNALNUMBER AS NVARCHAR(100)), '-', ''), ' ', '') LIKE :tracking
-        """)
-    else:
-        sql = text("""
-            SELECT PRIMARYREFERENCE, EXPECTED_DELIVERYDATE
-            FROM [BRING].[v_dossiers]
+
             WHERE
                 REPLACE(REPLACE(CAST(PRIMARYREFERENCE AS NVARCHAR(100)), '-', ''), ' ', '') LIKE :tracking
                 OR REPLACE(REPLACE(CAST(EDIREFERENCE AS NVARCHAR(100)), '-', ''), ' ', '') LIKE :tracking
@@ -136,193 +172,388 @@ def fetch_tracking_data(engine_track, tracking_number, include_full=False):
         """)
 
     with engine_track.connect() as conn:
-        return conn.execute(sql, {"tracking": f"%{tracking_number}%"}).fetchone()
 
+        return conn.execute(
+            sql,
+            {"tracking": f"%{tracking_number}%"}
+        ).fetchone()
+
+
+# =====================================================
+# MAIN TRACKING HANDLER
+# =====================================================
 
 def handle_tracking(msg, engine_track, llm, session_id):
-    if not should_use_tracking(msg, session_id):
+
+    if not should_use_tracking(msg, session_id, llm):
         return None
 
     user_state = get_user_state(session_id)
+
     msg = msg.strip()
-    msg_lower = msg.lower()
 
-    # Continue flow
+    # =================================================
+    # CONTINUE FLOW
+    # =================================================
+
     if user_state["waiting_for_continue"]:
-        answer = classify_yes_no(msg, llm)
 
-        if answer == "yes":
+        intent = classify_tracking_intent(msg, llm)
+
+        if intent == "yes":
+
             reset_state(session_id)
+
             user_state = get_user_state(session_id)
+
             user_state["tracking_active"] = True
             user_state["waiting_for_tracking_number"] = True
-            return "Please provide your tracking number"
 
-        if answer == "no":
+            return ai_reply(
+                llm,
+                msg,
+                "Ask the user to provide the tracking number."
+            )
+
+        if intent == "no":
+
             reset_state(session_id)
-            return "Hoe kan ik je verder helpen?"
 
-        return "Please answer yes or no"
+            return ai_reply(
+                llm,
+                msg,
+                "Ask the user how else you can help."
+            )
 
-    # Choice flow
+        return ai_reply(
+            llm,
+            msg,
+            "Ask the user to answer yes or no."
+        )
+
+    # =================================================
+    # CHOICE FLOW
+    # =================================================
+
     if user_state["waiting_for_choice"]:
-        data = user_state["data"]
-        msg_clean = msg.lower()
 
-        if msg_clean in {"sender", "sender name", "sender_name", "zender naam"}:
-            intent = "sender_name"
-        elif msg_clean in {"sender address", "address sender", "sender_address" "zender naam"}:
-            intent = "sender_address"
-        elif msg_clean in {"receiver", "receiver name", "receiver_name", "ontvanger naam"}:
-            intent = "receiver_name"
-        elif msg_clean in {"receiver address", "address receiver", "receiver_address" "ontvanger adres"}:
-            intent = "receiver_address"
-        elif msg_clean in {"delivery", "delivery date", "eta", "when"}:
-            intent = "delivery"
-        elif msg_clean in {"reference", "tracking reference"}:
-            intent = "reference"
-        elif msg_clean in {"all", "full", "everything" "alles"}:
-            intent = "full"
-        else:
-            intent = classify_tracking_intent(msg, llm)
+        data = user_state["data"]
+
+        intent = classify_tracking_intent(msg, llm)
 
         if intent == "unknown":
-            return "I did not understand what you want to see."
+
+            return ai_reply(
+                llm,
+                msg,
+                "Tell the user you did not understand what information they want."
+            )
 
         if intent == "delivery":
-            response = f"Expected deliveryday: {data.get('EXPECTED_DELIVERYDATE')}"
+
+            response = (
+                f"Expected delivery day: "
+                f"{data.get('EXPECTED_DELIVERYDATE')}"
+            )
+
         elif intent == "reference":
-            response = f"Bring reference: {data.get('PRIMARYREFERENCE')}"
+
+            response = (
+                f"Bring reference: "
+                f"{data.get('PRIMARYREFERENCE')}"
+            )
+
         elif intent == "sender_name":
-            response = f"Sender: {data.get('L_NAMELINE1')}"
+
+            response = (
+                f"Sender: "
+                f"{data.get('L_NAMELINE1')}"
+            )
+
         elif intent == "sender_address":
+
             response = (
                 f"Sender Address:\n"
                 f"{data.get('L_ADDRESSLINE1')}\n"
-                f"{data.get('L_ZIPCODE')} {data.get('L_CITY')}\n"
+                f"{data.get('L_ZIPCODE')} "
+                f"{data.get('L_CITY')}\n"
                 f"{data.get('L_COUNTRY_FULL')}"
             )
+
         elif intent == "receiver_name":
-            response = f"Receiver: {data.get('U_NAMELINE1')}"
+
+            response = (
+                f"Receiver: "
+                f"{data.get('U_NAMELINE1')}"
+            )
+
         elif intent == "receiver_address":
+
             response = (
                 f"Receiver Address:\n"
                 f"{data.get('U_ADDRESSLINE1')}\n"
-                f"{data.get('U_ZIPCODE')} {data.get('U_CITY')}\n"
+                f"{data.get('U_ZIPCODE')} "
+                f"{data.get('U_CITY')}\n"
                 f"{data.get('U_COUNTRY_FULL')}"
             )
+
         else:
+
             response = (
-                f"Bring reference: {data.get('PRIMARYREFERENCE')}\n"
-                f"Customer reference: {data.get('EDIREFERENCE')}\n"
-                f"Expected deliveryday: {data.get('EXPECTED_DELIVERYDATE')}\n\n"
-                f"Sender:\n{data.get('L_NAMELINE1')}\n"
+                f"Bring reference: "
+                f"{data.get('PRIMARYREFERENCE')}\n"
+
+                f"Customer reference: "
+                f"{data.get('EDIREFERENCE')}\n"
+
+                f"Expected delivery day: "
+                f"{data.get('EXPECTED_DELIVERYDATE')}\n\n"
+
+                f"Sender:\n"
+                f"{data.get('L_NAMELINE1')}\n"
                 f"{data.get('L_ADDRESSLINE1')}\n"
-                f"{data.get('L_ZIPCODE')} {data.get('L_CITY')}\n"
+                f"{data.get('L_ZIPCODE')} "
+                f"{data.get('L_CITY')}\n"
                 f"{data.get('L_COUNTRY_FULL')}\n\n"
-                f"Receiver:\n{data.get('U_NAMELINE1')}\n"
+
+                f"Receiver:\n"
+                f"{data.get('U_NAMELINE1')}\n"
                 f"{data.get('U_ADDRESSLINE1')}\n"
-                f"{data.get('U_ZIPCODE')} {data.get('U_CITY')}\n"
+                f"{data.get('U_ZIPCODE')} "
+                f"{data.get('U_CITY')}\n"
                 f"{data.get('U_COUNTRY_FULL')}"
             )
 
         user_state["waiting_for_choice"] = False
         user_state["waiting_for_continue"] = True
-        return response + "\n\nDo you want to see something else? (yes/no)"
 
-    # Zipcode validation flow
+        followup = ai_reply(
+            llm,
+            msg,
+            "Ask the user if they want to see something else."
+        )
+
+        return f"{response}\n\n{followup}"
+
+    # =================================================
+    # ZIPCODE FLOW
+    # =================================================
+
     if user_state["waiting_for_zipcode"]:
+
         tracking_number = user_state["tracking_number"]
 
         try:
-            row = fetch_tracking_data(engine_track, tracking_number, include_full=True)
+
+            row = fetch_tracking_data(
+                engine_track,
+                tracking_number,
+                include_full=True
+            )
+
             if not row:
+
                 reset_state(session_id)
-                return "No result found"
+
+                return ai_reply(
+                    llm,
+                    msg,
+                    "Tell the user no shipment was found."
+                )
 
             data = dict(row._mapping)
 
         except Exception as e:
+
             reset_state(session_id)
+
             return str(e)
 
-        zipcode_input = msg.replace(" ", "").lower()
-        l_zip = str(data.get("L_ZIPCODE", "")).replace(" ", "").lower()
-        u_zip = str(data.get("U_ZIPCODE", "")).replace(" ", "").lower()
+        zipcode_input = (
+            msg
+            .replace(" ", "")
+            .lower()
+        )
+
+        l_zip = str(
+            data.get("L_ZIPCODE", "")
+        ).replace(" ", "").lower()
+
+        u_zip = str(
+            data.get("U_ZIPCODE", "")
+        ).replace(" ", "").lower()
 
         if zipcode_input not in {l_zip, u_zip}:
-            return "ZipCode does not match this shipment. Please try again"
+
+            return ai_reply(
+                llm,
+                msg,
+                "Tell the user the zipcode does not match the shipment."
+            )
 
         user_state["waiting_for_zipcode"] = False
         user_state["waiting_for_choice"] = True
         user_state["data"] = data
 
-        return (
-            f"What would you like to know about order {tracking_number}?\n"
-            f"- delivery\n"
-            f"- reference\n"
-            f"- sender name\n"
-            f"- sender address\n"
-            f"- receiver name\n"
-            f"- receiver address\n"
-            f"- full"
+        return ai_reply(
+            llm,
+            msg,
+            """
+Ask the user what they want to know.
+
+Options:
+- delivery
+- reference
+- sender name
+- sender address
+- receiver name
+- receiver address
+- full
+"""
         )
 
-    # Ask if user has zipcode
-    if user_state["waiting_for_zipcode_question"]:
-        answer = classify_yes_no(msg, llm)
+    # =================================================
+    # ZIPCODE QUESTION
+    # =================================================
 
-        if answer == "unknown":
-            return "Please answer yes or no"
+    if user_state["waiting_for_zipcode_question"]:
+
+        intent = classify_tracking_intent(msg, llm)
+
+        if intent not in {"yes", "no"}:
+
+            return ai_reply(
+                llm,
+                msg,
+                "Ask the user to answer yes or no."
+            )
 
         tracking_number = user_state["tracking_number"]
+
         user_state["waiting_for_zipcode_question"] = False
 
-        if answer == "yes":
+        if intent == "yes":
+
             user_state["waiting_for_zipcode"] = True
-            return "Please provide your ZipCode"
+
+            return ai_reply(
+                llm,
+                msg,
+                "Ask the user to provide the zipcode."
+            )
 
         try:
-            row = fetch_tracking_data(engine_track, tracking_number, include_full=False)
+
+            row = fetch_tracking_data(
+                engine_track,
+                tracking_number,
+                include_full=False
+            )
+
             if not row:
+
                 reset_state(session_id)
-                return "No result found"
+
+                return ai_reply(
+                    llm,
+                    msg,
+                    "Tell the user no shipment was found."
+                )
 
         except Exception as e:
+
             reset_state(session_id)
+
             return str(e)
 
         user_state["waiting_for_continue"] = True
-        return (
-            f"Bring reference: {row[0]}\n"
-            f"Expected deliveryday: {row[1]}\n\n"
-            "Do you want to see something else? (yes/no)"
+
+        followup = ai_reply(
+            llm,
+            msg,
+            "Ask the user if they want to see something else."
         )
 
-    # Start tracking flow
-    if any(keyword in msg_lower for keyword in {"track", "trace", "tracking"}):
+        return (
+            f"Bring reference: {row[0]}\n"
+            f"Expected delivery day: {row[1]}\n\n"
+            f"{followup}"
+        )
+
+    # =================================================
+    # START TRACKING
+    # =================================================
+
+    intent = classify_tracking_intent(msg, llm)
+
+    if intent == "tracking":
+
         user_state["tracking_active"] = True
         user_state["waiting_for_tracking_number"] = True
-        return "Please provide your tracking number"
 
-    # Tracking number input
-    if user_state["tracking_active"] and user_state["waiting_for_tracking_number"]:
-        clean_msg = msg.replace(" ", "").replace("-", "")
+        return ai_reply(
+            llm,
+            msg,
+            "Ask the user to provide the tracking number."
+        )
 
-        if not clean_msg.isdigit() or not (6 <= len(clean_msg) <= 30):
-            return "Please provide a valid tracking number"
+    # =================================================
+    # TRACKING NUMBER INPUT
+    # =================================================
+
+    if (
+        user_state["tracking_active"]
+        and user_state["waiting_for_tracking_number"]
+    ):
+
+        clean_msg = (
+            msg
+            .replace(" ", "")
+            .replace("-", "")
+        )
+
+        if (
+            not clean_msg.isdigit()
+            or not (6 <= len(clean_msg) <= 30)
+        ):
+
+            return ai_reply(
+                llm,
+                msg,
+                "Tell the user to provide a valid tracking number."
+            )
 
         try:
-            row = fetch_tracking_data(engine_track, clean_msg, include_full=False)
+
+            row = fetch_tracking_data(
+                engine_track,
+                clean_msg,
+                include_full=False
+            )
+
             if not row:
-                return "Tracking number not found"
+
+                return ai_reply(
+                    llm,
+                    msg,
+                    "Tell the user the tracking number was not found."
+                )
 
         except Exception as e:
+
             return str(e)
 
         user_state["tracking_number"] = clean_msg
+
         user_state["waiting_for_tracking_number"] = False
+
         user_state["waiting_for_zipcode_question"] = True
-        return "Do you have a ZipCode? (yes/no)"
+
+        return ai_reply(
+            llm,
+            msg,
+            "Ask the user if they have the zipcode."
+        )
 
     return None
+

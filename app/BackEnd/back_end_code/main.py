@@ -192,7 +192,7 @@ def answer_question(question: str, session_id: str):
     if msg == "Interne vraag":
 
         prompt = generate_prompt(
-            "Hallo! Wat is je interne vraag?"
+            "Wat is uw interne vraag?"
         )
 
         response = llm.invoke(prompt)
