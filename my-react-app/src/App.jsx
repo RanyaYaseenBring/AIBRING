@@ -154,7 +154,7 @@ function App() {
             <div
               className="message-option-bubble"
               onClick={() =>
-                handleUserSend("Interne Vraag")
+                handleUserSend("Interne_Vraag")
               }
             >
               Interne Vraag
