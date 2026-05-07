@@ -30,7 +30,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 def make_engine(server, database, username, password):
     odbc_str = (
         f"DRIVER={{ODBC Driver 18 for SQL Server}};"

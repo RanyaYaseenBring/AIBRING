@@ -142,7 +142,6 @@ def should_use_tracking(msg, session_id, llm):
 
     return intent == "tracking"
 
-
 def fetch_tracking_data(
     engine_track,
     tracking_number,
