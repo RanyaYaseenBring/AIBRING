@@ -137,7 +137,12 @@ def should_use_tracking(msg, session_id, llm):
 # FETCH TRACKING DATA
 # =====================================================
 
-def fetch_tracking_data(engine_track, tracking_number, include_full=False):
+
+def fetch_tracking_data(
+    engine_track,
+    tracking_number,
+    include_full=False
+):
 
     tracking_number = (
         tracking_number
@@ -148,36 +153,86 @@ def fetch_tracking_data(engine_track, tracking_number, include_full=False):
     if include_full:
 
         sql = text("""
-            SELECT PRIMARYREFERENCE,
-                   EXPECTED_DELIVERYDATE,
-                   EDIREFERENCE,
+            SELECT
+                PRIMARYREFERENCE,
+                EXPECTED_DELIVERYDATE,
+                EDIREFERENCE,
 
-                   L_NAMELINE1,
-                   L_ADDRESSLINE1,
-                   L_ZIPCODE,
-                   L_CITY,
-                   L_COUNTRY_FULL,
+                L_NAMELINE1,
+                L_ADDRESSLINE1,
+                L_ZIPCODE,
+                L_CITY,
+                L_COUNTRY_FULL,
 
-                   U_NAMELINE1,
-                   U_ADDRESSLINE1,
-                   U_ZIPCODE,
-                   U_CITY,
-                   U_COUNTRY_FULL
+                U_NAMELINE1,
+                U_ADDRESSLINE1,
+                U_ZIPCODE,
+                U_CITY,
+                U_COUNTRY_FULL
 
             FROM [BRING].[v_dossiers]
 
             WHERE
-                REPLACE(REPLACE(CAST(PRIMARYREFERENCE AS NVARCHAR(100)), '-', ''), ' ', '') LIKE :tracking
-                OR REPLACE(REPLACE(CAST(EDIREFERENCE AS NVARCHAR(100)), '-', ''), ' ', '') LIKE :tracking
-                OR REPLACE(REPLACE(CAST(INTERNALNUMBER AS NVARCHAR(100)), '-', ''), ' ', '') LIKE :tracking
+                REPLACE(REPLACE(
+                    CAST(PRIMARYREFERENCE AS NVARCHAR(100)),
+                    '-', ''
+                ), ' ', '') = :tracking
+
+                OR
+
+                REPLACE(REPLACE(
+                    CAST(EDIREFERENCE AS NVARCHAR(100)),
+                    '-', ''
+                ), ' ', '') = :tracking
+
+                OR
+
+                REPLACE(REPLACE(
+                    CAST(INTERNALNUMBER AS NVARCHAR(100)),
+                    '-', ''
+                ), ' ', '') = :tracking
+        """)
+
+    else:
+
+        sql = text("""
+            SELECT
+                PRIMARYREFERENCE,
+                EXPECTED_DELIVERYDATE
+
+            FROM [BRING].[v_dossiers]
+
+            WHERE
+                REPLACE(REPLACE(
+                    CAST(PRIMARYREFERENCE AS NVARCHAR(100)),
+                    '-', ''
+                ), ' ', '') = :tracking
+
+                OR
+
+                REPLACE(REPLACE(
+                    CAST(EDIREFERENCE AS NVARCHAR(100)),
+                    '-', ''
+                ), ' ', '') = :tracking
+
+                OR
+
+                REPLACE(REPLACE(
+                    CAST(INTERNALNUMBER AS NVARCHAR(100)),
+                    '-', ''
+                ), ' ', '') = :tracking
         """)
 
     with engine_track.connect() as conn:
 
-        return conn.execute(
+        row = conn.execute(
             sql,
-            {"tracking": f"%{tracking_number}%"}
+            {
+                "tracking": tracking_number
+            }
         ).fetchone()
+
+        return row
 
 
 # =====================================================
