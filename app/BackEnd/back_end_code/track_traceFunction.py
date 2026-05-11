@@ -1,8 +1,11 @@
-
 from sqlalchemy import text
-from ChatbotPrompt import generate_prompt
 
 session_states = {}
+
+
+# =====================================================
+# STATE MANAGEMENT
+# =====================================================
 
 def create_tracking_state():
 
@@ -32,20 +35,23 @@ def reset_state(session_id):
     session_states[session_id] = create_tracking_state()
 
 
+# =====================================================
+# AI REPLY
+# =====================================================
+
 def ai_reply(llm, user_message, instruction):
 
     prompt = f"""
 You are a logistics assistant.
 
 STRICT RULES:
-- Reply ONLY in the SAME language as the user message.
+- Reply ONLY in the SAME language as the user.
 - NEVER translate.
-- NEVER use multiple languages.
+- NEVER switch languages.
+- NEVER use Spanish.
 - NEVER use brackets.
-- NEVER explain translations.
 - Keep responses short and natural.
 - Output ONLY the final response text.
-- never talk spanish randomly
 
 USER MESSAGE:
 {user_message}
@@ -62,23 +68,98 @@ TASK:
 
     except Exception:
 
-        return instruction
+        return "Something went wrong."
+
+
+# =====================================================
+# INTENT CLASSIFIER
+# =====================================================
 
 def classify_tracking_intent(msg, llm):
 
     prompt = f"""
-You are a logistics assistant.
+You are a STRICT intent classifier.
 
-STRICT RULES:
-- The response language is 
-- NEVER switch languages.
-- NEVER translate.
-- NEVER use multiple languages.
-- Keep responses short and professional.
-- Output ONLY the final response.
--you NEVER repeat the question if the user answers
+You may ONLY return ONE of these exact words:
 
-User input:
+delivery
+reference
+sender_name
+sender_address
+receiver_name
+receiver_address
+full
+tracking
+yes
+no
+unknown
+
+RULES:
+- Return ONLY one word
+- No punctuation
+- No explanations
+- No sentences
+- Never answer conversationally
+- Never translate
+- Never use multiple words
+
+TRACKING EXAMPLES:
+
+"track and trace" -> tracking
+"tracking" -> tracking
+"where is my package" -> tracking
+"where is my shipment" -> tracking
+"pakket volgen" -> tracking
+"zending volgen" -> tracking
+"waar is mijn pakket" -> tracking
+"volg mijn pakket" -> tracking
+
+YES/NO EXAMPLES:
+
+"yes" -> yes
+"yeah" -> yes
+"yep" -> yes
+"ja" -> yes
+
+"no" -> no
+"nee" -> no
+
+DELIVERY EXAMPLES:
+
+"delivery" -> delivery
+"delivery date" -> delivery
+"bezorgdatum" -> delivery
+
+REFERENCE EXAMPLES:
+
+"reference" -> reference
+"referentie" -> reference
+
+SENDER EXAMPLES:
+
+"sender" -> sender_name
+"sender name" -> sender_name
+"afzender" -> sender_name
+
+"sender address" -> sender_address
+"adres afzender" -> sender_address
+
+RECEIVER EXAMPLES:
+
+"receiver" -> receiver_name
+"ontvanger" -> receiver_name
+
+"receiver address" -> receiver_address
+"adres ontvanger" -> receiver_address
+
+FULL EXAMPLES:
+
+"everything" -> full
+"all information" -> full
+"volledig" -> full
+"alles" -> full
+
+USER MESSAGE:
 {msg}
 """
 
@@ -112,6 +193,10 @@ User input:
         return "unknown"
 
 
+# =====================================================
+# SHOULD USE TRACKING
+# =====================================================
+
 def should_use_tracking(msg, session_id, llm):
 
     state = get_user_state(session_id)
@@ -130,6 +215,10 @@ def should_use_tracking(msg, session_id, llm):
 
     return intent == "tracking"
 
+
+# =====================================================
+# DATABASE FETCH
+# =====================================================
 
 def fetch_tracking_data(
     engine_track,
@@ -277,7 +366,7 @@ def handle_tracking(msg, engine_track, llm, session_id):
         return ai_reply(
             llm,
             msg,
-            "Ask the user to answer yes or no."
+            "Ask the user to answer with yes or no."
         )
 
     # =================================================
@@ -295,7 +384,18 @@ def handle_tracking(msg, engine_track, llm, session_id):
             return ai_reply(
                 llm,
                 msg,
-                "Tell the user you did not understand what information they want."
+                """
+Tell the user you did not understand.
+
+Available options:
+- delivery
+- reference
+- sender name
+- sender address
+- receiver name
+- receiver address
+- full
+"""
             )
 
         if intent == "delivery":
@@ -350,10 +450,10 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
             response = (
                 f"Bring reference: "
-                f"{data.get('PRIMARYREFERENCE')}\n"
+                f"{data.get('PRIMARYREFERENCE')}\n\n"
 
                 f"Customer reference: "
-                f"{data.get('EDIREFERENCE')}\n"
+                f"{data.get('EDIREFERENCE')}\n\n"
 
                 f"Expected delivery day: "
                 f"{data.get('EXPECTED_DELIVERYDATE')}\n\n"
@@ -379,7 +479,7 @@ def handle_tracking(msg, engine_track, llm, session_id):
         followup = ai_reply(
             llm,
             msg,
-            "Ask the user if they want to see something else."
+            "Ask the user if they want anything else."
         )
 
         return f"{response}\n\n{followup}"
@@ -448,7 +548,7 @@ def handle_tracking(msg, engine_track, llm, session_id):
             llm,
             msg,
             """
-Ask the user what they want to know.
+Ask the user what information they want.
 
 Options:
 - delivery
@@ -520,7 +620,7 @@ Options:
         followup = ai_reply(
             llm,
             msg,
-            "Ask the user if they want to see something else."
+            "Ask the user if they want anything else."
         )
 
         return (
@@ -605,4 +705,3 @@ Options:
         )
 
     return None
-
