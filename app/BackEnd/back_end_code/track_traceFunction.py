@@ -15,7 +15,6 @@ def create_tracking_state():
         "waiting_for_tracking_number": False,
         "waiting_for_zipcode_question": False,
         "waiting_for_zipcode": False,
-        "waiting_for_choice": False,
         "waiting_for_continue": False,
         "data": None
     }
@@ -82,13 +81,6 @@ You are a STRICT intent classifier.
 
 You may ONLY return ONE of these exact words:
 
-delivery
-reference
-sender_name
-sender_address
-receiver_name
-receiver_address
-full
 tracking
 yes
 no
@@ -124,41 +116,6 @@ YES/NO EXAMPLES:
 "no" -> no
 "nee" -> no
 
-DELIVERY EXAMPLES:
-
-"delivery" -> delivery
-"delivery date" -> delivery
-"bezorgdatum" -> delivery
-
-REFERENCE EXAMPLES:
-
-"reference" -> reference
-"referentie" -> reference
-
-SENDER EXAMPLES:
-
-"sender" -> sender_name
-"sender name" -> sender_name
-"afzender" -> sender_name
-
-"sender address" -> sender_address
-"adres afzender" -> sender_address
-
-RECEIVER EXAMPLES:
-
-"receiver" -> receiver_name
-"ontvanger" -> receiver_name
-
-"receiver address" -> receiver_address
-"adres ontvanger" -> receiver_address
-
-FULL EXAMPLES:
-
-"everything" -> full
-"all information" -> full
-"volledig" -> full
-"alles" -> full
-
 USER MESSAGE:
 {msg}
 """
@@ -173,13 +130,6 @@ USER MESSAGE:
         )
 
         allowed = {
-            "delivery",
-            "reference",
-            "sender_name",
-            "sender_address",
-            "receiver_name",
-            "receiver_address",
-            "full",
             "tracking",
             "yes",
             "no",
@@ -206,7 +156,6 @@ def should_use_tracking(msg, session_id, llm):
         or state["waiting_for_tracking_number"]
         or state["waiting_for_zipcode_question"]
         or state["waiting_for_zipcode"]
-        or state["waiting_for_choice"]
         or state["waiting_for_continue"]
     ):
         return True
@@ -370,121 +319,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
         )
 
     # =================================================
-    # CHOICE FLOW
-    # =================================================
-
-    if user_state["waiting_for_choice"]:
-
-        data = user_state["data"]
-
-        intent = classify_tracking_intent(msg, llm)
-
-        if intent == "unknown":
-
-            return ai_reply(
-                llm,
-                msg,
-                """
-Tell the user you did not understand.
-
-Available options:
-- delivery
-- reference
-- sender name
-- sender address
-- receiver name
-- receiver address
-- full
-"""
-            )
-
-        if intent == "delivery":
-
-            response = (
-                f"Expected delivery day: "
-                f"{data.get('EXPECTED_DELIVERYDATE')}"
-            )
-
-        elif intent == "reference":
-
-            response = (
-                f"Bring reference: "
-                f"{data.get('PRIMARYREFERENCE')}"
-            )
-
-        elif intent == "sender_name":
-
-            response = (
-                f"Sender: "
-                f"{data.get('L_NAMELINE1')}"
-            )
-
-        elif intent == "sender_address":
-
-            response = (
-                f"Sender Address:\n"
-                f"{data.get('L_ADDRESSLINE1')}\n"
-                f"{data.get('L_ZIPCODE')} "
-                f"{data.get('L_CITY')}\n"
-                f"{data.get('L_COUNTRY_FULL')}"
-            )
-
-        elif intent == "receiver_name":
-
-            response = (
-                f"Receiver: "
-                f"{data.get('U_NAMELINE1')}"
-            )
-
-        elif intent == "receiver_address":
-
-            response = (
-                f"Receiver Address:\n"
-                f"{data.get('U_ADDRESSLINE1')}\n"
-                f"{data.get('U_ZIPCODE')} "
-                f"{data.get('U_CITY')}\n"
-                f"{data.get('U_COUNTRY_FULL')}"
-            )
-
-        else:
-
-            response = (
-                f"Bring reference: "
-                f"{data.get('PRIMARYREFERENCE')}\n\n"
-
-                f"Customer reference: "
-                f"{data.get('EDIREFERENCE')}\n\n"
-
-                f"Expected delivery day: "
-                f"{data.get('EXPECTED_DELIVERYDATE')}\n\n"
-
-                f"Sender:\n"
-                f"{data.get('L_NAMELINE1')}\n"
-                f"{data.get('L_ADDRESSLINE1')}\n"
-                f"{data.get('L_ZIPCODE')} "
-                f"{data.get('L_CITY')}\n"
-                f"{data.get('L_COUNTRY_FULL')}\n\n"
-
-                f"Receiver:\n"
-                f"{data.get('U_NAMELINE1')}\n"
-                f"{data.get('U_ADDRESSLINE1')}\n"
-                f"{data.get('U_ZIPCODE')} "
-                f"{data.get('U_CITY')}\n"
-                f"{data.get('U_COUNTRY_FULL')}"
-            )
-
-        user_state["waiting_for_choice"] = False
-        user_state["waiting_for_continue"] = True
-
-        followup = ai_reply(
-            llm,
-            msg,
-            "Ask the user if they want anything else."
-        )
-
-        return f"{response}\n\n{followup}"
-
-    # =================================================
     # ZIPCODE FLOW
     # =================================================
 
@@ -541,25 +375,40 @@ Available options:
             )
 
         user_state["waiting_for_zipcode"] = False
-        user_state["waiting_for_choice"] = True
-        user_state["data"] = data
+        user_state["waiting_for_continue"] = True
 
-        return ai_reply(
+        response = (
+            f"Bring reference: "
+            f"{data.get('PRIMARYREFERENCE')}\n\n"
+
+            f"Customer reference: "
+            f"{data.get('EDIREFERENCE')}\n\n"
+
+            f"Expected delivery day: "
+            f"{data.get('EXPECTED_DELIVERYDATE')}\n\n"
+
+            f"Sender:\n"
+            f"{data.get('L_NAMELINE1')}\n"
+            f"{data.get('L_ADDRESSLINE1')}\n"
+            f"{data.get('L_ZIPCODE')} "
+            f"{data.get('L_CITY')}\n"
+            f"{data.get('L_COUNTRY_FULL')}\n\n"
+
+            f"Receiver:\n"
+            f"{data.get('U_NAMELINE1')}\n"
+            f"{data.get('U_ADDRESSLINE1')}\n"
+            f"{data.get('U_ZIPCODE')} "
+            f"{data.get('U_CITY')}\n"
+            f"{data.get('U_COUNTRY_FULL')}"
+        )
+
+        followup = ai_reply(
             llm,
             msg,
-            """
-Ask the user what information they want.
-
-Options:
-- delivery
-- reference
-- sender name
-- sender address
-- receiver name
-- receiver address
-- full
-"""
+            "Ask the user if they want anything else."
         )
+
+        return f"{response}\n\n{followup}"
 
     # =================================================
     # ZIPCODE QUESTION
@@ -596,7 +445,7 @@ Options:
             row = fetch_tracking_data(
                 engine_track,
                 tracking_number,
-                include_full=False
+                include_full=True
             )
 
             if not row:
@@ -609,6 +458,8 @@ Options:
                     "Tell the user no shipment was found."
                 )
 
+            data = dict(row._mapping)
+
         except Exception as e:
 
             reset_state(session_id)
@@ -617,34 +468,38 @@ Options:
 
         user_state["waiting_for_continue"] = True
 
+        response = (
+            f"Bring reference: "
+            f"{data.get('PRIMARYREFERENCE')}\n\n"
+
+            f"Customer reference: "
+            f"{data.get('EDIREFERENCE')}\n\n"
+
+            f"Expected delivery day: "
+            f"{data.get('EXPECTED_DELIVERYDATE')}\n\n"
+
+            f"Sender:\n"
+            f"{data.get('L_NAMELINE1')}\n"
+            f"{data.get('L_ADDRESSLINE1')}\n"
+            f"{data.get('L_ZIPCODE')} "
+            f"{data.get('L_CITY')}\n"
+            f"{data.get('L_COUNTRY_FULL')}\n\n"
+
+            f"Receiver:\n"
+            f"{data.get('U_NAMELINE1')}\n"
+            f"{data.get('U_ADDRESSLINE1')}\n"
+            f"{data.get('U_ZIPCODE')} "
+            f"{data.get('U_CITY')}\n"
+            f"{data.get('U_COUNTRY_FULL')}"
+        )
+
         followup = ai_reply(
             llm,
             msg,
             "Ask the user if they want anything else."
         )
 
-        return (
-            f"Bring reference: {row[0]}\n"
-            f"Expected delivery day: {row[1]}\n\n"
-            f"{followup}"
-        )
-
-    # =================================================
-    # START TRACKING
-    # =================================================
-
-    intent = classify_tracking_intent(msg, llm)
-
-    if intent == "tracking":
-
-        user_state["tracking_active"] = True
-        user_state["waiting_for_tracking_number"] = True
-
-        return ai_reply(
-            llm,
-            msg,
-            "Ask the user to provide the tracking number."
-        )
+        return f"{response}\n\n{followup}"
 
     # =================================================
     # TRACKING NUMBER INPUT
@@ -702,6 +557,23 @@ Options:
             llm,
             msg,
             "Ask the user if they have the zipcode."
+        )
+
+    # =================================================
+    # START TRACKING
+    # =================================================
+
+    intent = classify_tracking_intent(msg, llm)
+
+    if intent == "tracking":
+
+        user_state["tracking_active"] = True
+        user_state["waiting_for_tracking_number"] = True
+
+        return ai_reply(
+            llm,
+            msg,
+            "Ask the user to provide the tracking number."
         )
 
     return None
