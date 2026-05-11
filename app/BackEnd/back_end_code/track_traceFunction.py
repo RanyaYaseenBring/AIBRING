@@ -116,6 +116,11 @@ YES/NO EXAMPLES:
 "no" -> no
 "nee" -> no
 
+Heb je de postcode?
+→ nee
+
+EDI reference: 847382
+Expected delivery day: 2026-05-11
 USER MESSAGE:
 {msg}
 """
