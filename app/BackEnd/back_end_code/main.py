@@ -16,16 +16,10 @@ from ChatbotPrompt import generate_prompt
 from track_traceFunction import handle_tracking
 from latest_order import get_latest_order
 
-
 app = FastAPI()
 
 chat_sessions = {}
 last_order_cache = None
-
-
-# =====================================================
-# CORS
-# =====================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -63,15 +57,20 @@ engine_emp = make_engine(
     "sql-bringbi-prod-001.database.windows.net",
     "sqldb-bringbi-prod-001",
     "bringgpt",
-    "Qxn@7pLW$TwgHG36ewa3"
+    ""
 )
 
 engine_track = make_engine(
     "sql-bringct-prod-001.database.windows.net",
     "sqldb-bringct-prod-001",
     "svc_CHATBOT",
-    "GB94QV4e48NH8Vz"
+    ""
 )
+
+
+# =====================================================
+# LLM
+# =====================================================
 
 username_llm = "ITSupport"
 password_llm = "blistering-plafond-useless"
@@ -92,6 +91,11 @@ llm = ChatOllama(
     base_url="http://172.20.20.181:11434",
     headers=headers
 )
+
+
+# =====================================================
+# SESSION STATE
+# =====================================================
 
 def create_empty_state():
 
@@ -124,6 +128,10 @@ def reset_state(session_id: str):
     chat_sessions[session_id] = create_empty_state()
 
 
+# =====================================================
+# CHAT HISTORY
+# =====================================================
+
 def append_history(session_id: str, role: str, message: str):
 
     state = get_user_state(session_id)
@@ -142,11 +150,20 @@ def get_history(session_id: str):
 
     return get_user_state(session_id)["history"]
 
+
+# =====================================================
+# MAIN CHAT FUNCTION
+# =====================================================
+
 def answer_question(question: str, session_id: str):
 
     msg = question.strip()
 
     state = get_user_state(session_id)
+
+    # =================================================
+    # GENERAL MODE BUTTON
+    # =================================================
 
     if msg == "Algemene vraag":
 
@@ -161,6 +178,10 @@ def answer_question(question: str, session_id: str):
 
         return answer
 
+    # =================================================
+    # TRACKING BUTTON
+    # =================================================
+
     if msg == "Track & Trace":
 
         state["mode"] = "tracking"
@@ -173,6 +194,7 @@ def answer_question(question: str, session_id: str):
         )
 
         append_history(session_id, "user", msg)
+
         append_history(
             session_id,
             "assistant",
@@ -180,6 +202,10 @@ def answer_question(question: str, session_id: str):
         )
 
         return tracking_response
+
+    # =================================================
+    # INTERNAL MODE BUTTON
+    # =================================================
 
     if msg == "Interne vraag":
 
@@ -194,6 +220,9 @@ def answer_question(question: str, session_id: str):
 
         return answer
 
+    # =================================================
+    # TRACKING FLOW
+    # =================================================
 
     tracking_response = handle_tracking(
         msg,
@@ -213,6 +242,10 @@ def answer_question(question: str, session_id: str):
         )
 
         return tracking_response
+
+    # =================================================
+    # HISTORY CONTEXT
+    # =================================================
 
     history = get_history(session_id)
 
@@ -238,13 +271,42 @@ def answer_question(question: str, session_id: str):
         f"Nieuwe vraag: {msg}"
     )
 
+    # =================================================
+    # PROMPT SELECTION
+    # =================================================
+
+    # INTERNAL QUESTIONS
     if state["mode"] == "internal":
 
         prompt = generate_prompt(full_input)
 
+    # NORMAL CHAT
+    elif state["mode"] == "general":
+
+        prompt = f"""
+You are a helpful chatbot.
+
+STRICT RULES:
+- Talk naturally
+- Be friendly
+- Reply in the SAME language as the user
+- Never generate SQL
+- Never generate employee lookups
+- Never generate tracking logic
+- Keep responses short and natural
+
+USER MESSAGE:
+{msg}
+"""
+
+    # FALLBACK
     else:
 
         prompt = generate_prompt(full_input)
+
+    # =================================================
+    # LLM RESPONSE
+    # =================================================
 
     response = llm.invoke(prompt)
 
@@ -256,9 +318,17 @@ def answer_question(question: str, session_id: str):
 
         result = response.content.strip()
 
+        # =============================================
+        # LATEST ORDER
+        # =============================================
+
         if result == "LATEST_ORDER":
 
             answer = get_latest_order(engine_track)
+
+        # =============================================
+        # EMPLOYEE LOOKUP
+        # =============================================
 
         elif result.startswith("employee_lookup|"):
 
@@ -320,9 +390,17 @@ def answer_question(question: str, session_id: str):
                     "het zoeken naar de medewerker."
                 )
 
+        # =============================================
+        # NORMAL RESPONSE
+        # =============================================
+
         else:
 
             answer = result
+
+    # =================================================
+    # SAVE HISTORY
+    # =================================================
 
     append_history(session_id, "user", msg)
 
@@ -334,10 +412,20 @@ def answer_question(question: str, session_id: str):
 
     return answer
 
+
+# =====================================================
+# API MODEL
+# =====================================================
+
 class ChatReq(BaseModel):
 
     message: str
     session_id: str | None = None
+
+
+# =====================================================
+# CHAT ENDPOINT
+# =====================================================
 
 @app.post("/chat")
 async def chat(req: ChatReq):
@@ -361,6 +449,11 @@ async def chat(req: ChatReq):
         "session_id": session_id
     }
 
+
+# =====================================================
+# RESET ENDPOINT
+# =====================================================
+
 @app.post("/chat/reset/{session_id}")
 async def reset_chat(session_id: str):
 
@@ -370,6 +463,11 @@ async def reset_chat(session_id: str):
         "status": "reset",
         "session_id": session_id
     }
+
+
+# =====================================================
+# WEBSOCKET
+# =====================================================
 
 @app.websocket("/ws/latest-order")
 async def websocket_latest_order(websocket: WebSocket):
@@ -399,6 +497,11 @@ async def websocket_latest_order(websocket: WebSocket):
             print("WS ERROR:", e)
 
             break
+
+
+# =====================================================
+# START SERVER
+# =====================================================
 
 if __name__ == "__main__":
 

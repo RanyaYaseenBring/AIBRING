@@ -2,6 +2,11 @@ from sqlalchemy import text
 
 session_states = {}
 
+
+# =====================================================
+# STATE MANAGEMENT
+# =====================================================
+
 def create_tracking_state():
 
     return {
@@ -10,7 +15,8 @@ def create_tracking_state():
         "waiting_for_tracking_number": False,
         "waiting_for_zipcode_question": False,
         "waiting_for_zipcode": False,
-        "waiting_for_continue": False
+        "waiting_for_continue": False,
+        "language": "english"
     }
 
 
@@ -27,13 +33,18 @@ def reset_state(session_id):
 
     session_states[session_id] = create_tracking_state()
 
-def ai_reply(llm, user_message, instruction):
+
+# =====================================================
+# AI REPLY
+# =====================================================
+
+def ai_reply(llm, language, instruction):
 
     prompt = f"""
 You are a logistics assistant.
 
 STRICT RULES:
-- Reply ONLY in the SAME language as the USER MESSAGE.
+- Reply ONLY in this language: {language}
 - NEVER translate.
 - NEVER switch languages.
 - Keep responses short and natural.
@@ -42,9 +53,6 @@ STRICT RULES:
 - Never explain rules.
 - Never explain translations.
 - Never add extra commentary.
-
-USER MESSAGE:
-{user_message}
 
 TASK:
 {instruction}
@@ -60,6 +68,48 @@ TASK:
 
         return "Something went wrong."
 
+
+# =====================================================
+# LANGUAGE DETECTION
+# =====================================================
+
+def detect_language(llm, msg):
+
+    prompt = f"""
+Detect the language of this message.
+
+ONLY return:
+english
+or
+dutch
+
+MESSAGE:
+{msg}
+"""
+
+    try:
+
+        result = (
+            llm.invoke(prompt)
+            .content
+            .strip()
+            .lower()
+        )
+
+        if result not in ["english", "dutch"]:
+
+            return "english"
+
+        return result
+
+    except:
+
+        return "english"
+
+
+# =====================================================
+# INTENT CLASSIFIER
+# =====================================================
 
 def classify_tracking_intent(msg, llm):
 
@@ -128,6 +178,11 @@ USER MESSAGE:
 
         return "unknown"
 
+
+# =====================================================
+# SHOULD USE TRACKING
+# =====================================================
+
 def should_use_tracking(msg, session_id, llm):
 
     state = get_user_state(session_id)
@@ -144,6 +199,11 @@ def should_use_tracking(msg, session_id, llm):
     intent = classify_tracking_intent(msg, llm)
 
     return intent == "tracking"
+
+
+# =====================================================
+# DATABASE FETCH
+# =====================================================
 
 def fetch_tracking_data(
     engine_track,
@@ -241,6 +301,11 @@ def fetch_tracking_data(
 
         return row
 
+
+# =====================================================
+# MAIN TRACKING HANDLER
+# =====================================================
+
 def handle_tracking(msg, engine_track, llm, session_id):
 
     if not should_use_tracking(msg, session_id, llm):
@@ -249,6 +314,12 @@ def handle_tracking(msg, engine_track, llm, session_id):
     user_state = get_user_state(session_id)
 
     msg = msg.strip()
+
+    language = user_state["language"]
+
+    # =================================================
+    # CONTINUE FLOW
+    # =================================================
 
     if user_state["waiting_for_continue"]:
 
@@ -260,12 +331,14 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
             user_state = get_user_state(session_id)
 
+            user_state["language"] = language
+
             user_state["tracking_active"] = True
             user_state["waiting_for_tracking_number"] = True
 
             return ai_reply(
                 llm,
-                msg,
+                language,
                 "Ask the user to provide the tracking number."
             )
 
@@ -275,16 +348,19 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
             return ai_reply(
                 llm,
-                msg,
+                language,
                 "Ask the user how else you can help."
             )
 
         return ai_reply(
             llm,
-            msg,
+            language,
             "Ask the user to answer yes or no."
         )
 
+    # =================================================
+    # ZIPCODE FLOW
+    # =================================================
 
     if user_state["waiting_for_zipcode"]:
 
@@ -304,7 +380,7 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
                 return ai_reply(
                     llm,
-                    msg,
+                    language,
                     "Tell the user no shipment was found."
                 )
 
@@ -334,7 +410,7 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
             return ai_reply(
                 llm,
-                msg,
+                language,
                 "Tell the user the zipcode does not match the shipment."
             )
 
@@ -368,11 +444,15 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
         followup = ai_reply(
             llm,
-            msg,
+            language,
             "Ask the user if they need anything else."
         )
 
         return f"{response}\n\n{followup}"
+
+    # =================================================
+    # ZIPCODE QUESTION
+    # =================================================
 
     if user_state["waiting_for_zipcode_question"]:
 
@@ -382,7 +462,7 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
             return ai_reply(
                 llm,
-                msg,
+                language,
                 "Ask the user to answer yes or no."
             )
 
@@ -396,7 +476,7 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
             return ai_reply(
                 llm,
-                msg,
+                language,
                 "Ask the user to provide the zipcode."
             )
 
@@ -414,7 +494,7 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
                 return ai_reply(
                     llm,
-                    msg,
+                    language,
                     "Tell the user no shipment was found."
                 )
 
@@ -433,11 +513,15 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
         followup = ai_reply(
             llm,
-            msg,
+            language,
             "Ask the user if they need anything else."
         )
 
         return f"{response}\n\n{followup}"
+
+    # =================================================
+    # TRACKING NUMBER INPUT
+    # =================================================
 
     if (
         user_state["tracking_active"]
@@ -457,7 +541,7 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
             return ai_reply(
                 llm,
-                msg,
+                language,
                 "Tell the user to provide a valid tracking number."
             )
 
@@ -473,7 +557,7 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
                 return ai_reply(
                     llm,
-                    msg,
+                    language,
                     "Tell the user the tracking number was not found."
                 )
 
@@ -489,20 +573,28 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
         return ai_reply(
             llm,
-            msg,
+            language,
             "Ask the user if they have the zipcode."
         )
+
 
     intent = classify_tracking_intent(msg, llm)
 
     if intent == "tracking":
+
+        detected_language = detect_language(
+            llm,
+            msg
+        )
+
+        user_state["language"] = detected_language
 
         user_state["tracking_active"] = True
         user_state["waiting_for_tracking_number"] = True
 
         return ai_reply(
             llm,
-            msg,
+            detected_language,
             "Ask the user to provide the tracking number."
         )
 
