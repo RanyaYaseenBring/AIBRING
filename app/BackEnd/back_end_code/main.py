@@ -2,22 +2,30 @@ import urllib.parse
 import base64
 import json
 import asyncio
+
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
+
 from langchain_ollama import ChatOllama
-from langchain_community.utilities import SQLDatabase
+
 from ChatBotMemory import save_chat_memory
 from ChatbotPrompt import generate_prompt
 from track_traceFunction import handle_tracking
 from latest_order import get_latest_order
 
+
 app = FastAPI()
 
 chat_sessions = {}
 last_order_cache = None
+
+
+# =====================================================
+# CORS
+# =====================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,7 +34,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# =====================================================
+# DATABASE
+# =====================================================
+
 def make_engine(server, database, username, password):
+
     odbc_str = (
         f"DRIVER={{ODBC Driver 18 for SQL Server}};"
         f"SERVER=tcp:{server},1433;"
@@ -44,6 +58,7 @@ def make_engine(server, database, username, password):
         pool_pre_ping=True
     )
 
+
 engine_emp = make_engine(
     "sql-bringbi-prod-001.database.windows.net",
     "sqldb-bringbi-prod-001",
@@ -57,6 +72,7 @@ engine_track = make_engine(
     "svc_CHATBOT",
     "GB94QV4e48NH8Vz"
 )
+
 
 username_llm = "ITSupport"
 password_llm = "blistering-plafond-useless"
@@ -79,27 +95,38 @@ llm = ChatOllama(
 )
 
 def create_empty_state():
+
     return {
         "history": [],
+        "mode": "general",
+
         "tracking": {
             "tracking_active": False,
             "tracking_number": None,
             "waiting_for_tracking_number": False,
             "waiting_for_zipcode_question": False,
             "waiting_for_zipcode": False,
-            "waiting_for_choice": False,
-            "waiting_for_continue": False,
-            "data": None
+            "waiting_for_continue": False
         }
     }
 
+
 def get_user_state(session_id: str):
+
     if session_id not in chat_sessions:
+
         chat_sessions[session_id] = create_empty_state()
 
     return chat_sessions[session_id]
 
+
+def reset_state(session_id: str):
+
+    chat_sessions[session_id] = create_empty_state()
+
+
 def append_history(session_id: str, role: str, message: str):
+
     state = get_user_state(session_id)
 
     state["history"].append({
@@ -108,14 +135,13 @@ def append_history(session_id: str, role: str, message: str):
     })
 
     if len(state["history"]) > 20:
+
         state["history"] = state["history"][-20:]
 
+
 def get_history(session_id: str):
+
     return get_user_state(session_id)["history"]
-
-def reset_state(session_id: str):
-    chat_sessions[session_id] = create_empty_state()
-
 
 def answer_question(question: str, session_id: str):
 
@@ -125,31 +151,20 @@ def answer_question(question: str, session_id: str):
 
     if msg == "Algemene vraag":
 
-        prompt = """
-        De gebruiker wil een algemene vraag stellen.
-        je praat in de taal van de gebruiker
-        Begroet vriendelijk en vraag waarmee je kan helpen.
-        """
+        state["mode"] = "general"
 
-        response = llm.invoke(prompt)
-
-        answer = response.content.strip()
-
-        append_history(
-            session_id,
-            "user",
-            msg
+        answer = (
+            "Hallo! Hoe kan ik u vandaag helpen?"
         )
 
-        append_history(
-            session_id,
-            "assistant",
-            answer
-        )
+        append_history(session_id, "user", msg)
+        append_history(session_id, "assistant", answer)
 
         return answer
 
     if msg == "Track & Trace":
+
+        state["mode"] = "tracking"
 
         tracking_response = handle_tracking(
             "start_tracking",
@@ -158,12 +173,7 @@ def answer_question(question: str, session_id: str):
             session_id
         )
 
-        append_history(
-            session_id,
-            "user",
-            msg
-        )
-
+        append_history(session_id, "user", msg)
         append_history(
             session_id,
             "assistant",
@@ -174,28 +184,18 @@ def answer_question(question: str, session_id: str):
 
     if msg == "Interne vraag":
 
-        prompt = generate_prompt(
+        state["mode"] = "internal"
+
+        answer = (
             "Wat is uw interne vraag?"
         )
 
-        response = llm.invoke(prompt)
-
-        answer = response.content.strip()
-
-        append_history(
-            session_id,
-            "user",
-            msg
-        )
-
-        append_history(
-            session_id,
-            "assistant",
-            answer
-        )
+        append_history(session_id, "user", msg)
+        append_history(session_id, "assistant", answer)
 
         return answer
 
+
     tracking_response = handle_tracking(
         msg,
         engine_track,
@@ -205,11 +205,7 @@ def answer_question(question: str, session_id: str):
 
     if tracking_response is not None:
 
-        append_history(
-            session_id,
-            "user",
-            msg
-        )
+        append_history(session_id, "user", msg)
 
         append_history(
             session_id,
@@ -243,7 +239,13 @@ def answer_question(question: str, session_id: str):
         f"Nieuwe vraag: {msg}"
     )
 
-    prompt = generate_prompt(full_input)
+    if state["mode"] == "internal":
+
+        prompt = generate_prompt(full_input)
+
+    else:
+
+        prompt = generate_prompt(full_input)
 
     response = llm.invoke(prompt)
 
@@ -268,10 +270,11 @@ def answer_question(question: str, session_id: str):
                 if field == "Address":
 
                     query = """
-                    SELECT street,
-                           HouseNumber,
-                           ZIPCODE,
-                           Country
+                    SELECT
+                        street,
+                        HouseNumber,
+                        ZIPCODE,
+                        Country
                     FROM afas.Bring_Employees
                     WHERE FirstName = :name
                     """
@@ -311,163 +314,7 @@ def answer_question(question: str, session_id: str):
                         f"voor {name}."
                     )
 
-            except:
-
-                answer = (
-                    "Er trad een fout op bij "
-                    "het zoeken naar de medewerker."
-                )
-        else:
-
-            answer = result
-
-    append_history(
-        session_id,
-        "user",
-        msg
-    )
-
-    append_history(
-        session_id,
-        "assistant",
-        str(answer)
-    )
-
-    return answer
-
-    append_history(
-            session_id,
-            "user",
-            msg
-        )
-
-    append_history(
-            session_id,
-            "assistant",
-            str(tracking_response)
-        )
-
-    return tracking_response
-
-    tracking_response = handle_tracking(
-        msg,
-        engine_track,
-        llm,
-        session_id
-    )
-
-    if tracking_response is not None:
-
-        append_history(
-            session_id,
-            "user",
-            msg
-        )
-
-        append_history(
-            session_id,
-            "assistant",
-            str(tracking_response)
-        )
-
-        return tracking_response
-
-
-    history = get_history(session_id)
-
-    recent_history = history[-30:]
-
-    formatted_context = ""
-
-    for item in recent_history:
-
-        role_name = (
-            "Gebruiker"
-            if item["role"] == "user"
-            else "Assistent"
-        )
-
-        formatted_context += (
-            f"{role_name}: {item['message']}\n"
-        )
-
-
-    full_input = (
-        f"Context van het gesprek:\n"
-        f"{formatted_context}\n"
-        f"Nieuwe vraag: {msg}"
-    )
-
-    prompt = generate_prompt(full_input)
-
-    response = llm.invoke(prompt)
-
-    if not response or not response.content:
-
-        answer = "Geen antwoord ontvangen."
-
-    else:
-
-        result = response.content.strip()
-
-        if result == "LATEST_ORDER":
-
-            answer = get_latest_order(engine_track)
-
-
-        elif result.startswith("employee_lookup|"):
-
-            try:
-
-                _, name, field = result.split("|", 2)
-
-                if field == "Address":
-
-                    query = """
-                    SELECT street,
-                           HouseNumber,
-                           ZIPCODE,
-                           Country
-                    FROM afas.Bring_Employees
-                    WHERE FirstName = :name
-                    """
-
-                else:
-
-                    query = f"""
-                    SELECT {field}
-                    FROM afas.Bring_Employees
-                    WHERE FirstName = :name
-                    """
-
-                with engine_emp.connect() as conn:
-
-                    row = conn.execute(
-                        text(query),
-                        {"name": name}
-                    ).fetchone()
-
-                if row:
-
-                    if field == "Address":
-
-                        answer = (
-                            f"{row[0]} {row[1]}, "
-                            f"{row[2]}, {row[3]}"
-                        )
-
-                    else:
-
-                        answer = str(row[0])
-
-                else:
-
-                    answer = (
-                        f"Ik kon geen gegevens vinden "
-                        f"voor {name}."
-                    )
-
-            except:
+            except Exception:
 
                 answer = (
                     "Er trad een fout op bij "
@@ -478,11 +325,7 @@ def answer_question(question: str, session_id: str):
 
             answer = result
 
-    append_history(
-        session_id,
-        "user",
-        msg
-    )
+    append_history(session_id, "user", msg)
 
     append_history(
         session_id,
@@ -493,14 +336,17 @@ def answer_question(question: str, session_id: str):
     return answer
 
 class ChatReq(BaseModel):
+
     message: str
     session_id: str | None = None
-
 
 @app.post("/chat")
 async def chat(req: ChatReq):
 
-    session_id = req.session_id or "default-session"
+    session_id = (
+        req.session_id
+        or "default-session"
+    )
 
     ans = await run_in_threadpool(
         lambda: answer_question(
@@ -516,7 +362,6 @@ async def chat(req: ChatReq):
         "session_id": session_id
     }
 
-
 @app.post("/chat/reset/{session_id}")
 async def reset_chat(session_id: str):
 
@@ -526,7 +371,6 @@ async def reset_chat(session_id: str):
         "status": "reset",
         "session_id": session_id
     }
-
 
 @app.websocket("/ws/latest-order")
 async def websocket_latest_order(websocket: WebSocket):

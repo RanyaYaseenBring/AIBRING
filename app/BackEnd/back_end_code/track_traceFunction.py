@@ -15,8 +15,7 @@ def create_tracking_state():
         "waiting_for_tracking_number": False,
         "waiting_for_zipcode_question": False,
         "waiting_for_zipcode": False,
-        "waiting_for_continue": False,
-        "data": None
+        "waiting_for_continue": False
     }
 
 
@@ -48,6 +47,9 @@ STRICT RULES:
 - NEVER translate.
 - NEVER switch languages.
 - NEVER use Spanish.
+- NEVER use Portuguese.
+- NEVER use German.
+- NEVER use French.
 - NEVER use brackets.
 - Keep responses short and natural.
 - Output ONLY the final response text.
@@ -106,21 +108,18 @@ TRACKING EXAMPLES:
 "waar is mijn pakket" -> tracking
 "volg mijn pakket" -> tracking
 
-YES/NO EXAMPLES:
+YES EXAMPLES:
 
 "yes" -> yes
 "yeah" -> yes
 "yep" -> yes
 "ja" -> yes
 
+NO EXAMPLES:
+
 "no" -> no
 "nee" -> no
 
-Heb je de postcode?
-→ nee
-
-EDI reference: 847382
-Expected delivery day: 2026-05-11
 USER MESSAGE:
 {msg}
 """
@@ -147,6 +146,11 @@ USER MESSAGE:
 
         return "unknown"
 
+
+# =====================================================
+# SHOULD USE TRACKING
+# =====================================================
+
 def should_use_tracking(msg, session_id, llm):
 
     state = get_user_state(session_id)
@@ -163,6 +167,11 @@ def should_use_tracking(msg, session_id, llm):
     intent = classify_tracking_intent(msg, llm)
 
     return intent == "tracking"
+
+
+# =====================================================
+# DATABASE FETCH
+# =====================================================
 
 def fetch_tracking_data(
     engine_track,
@@ -223,7 +232,7 @@ def fetch_tracking_data(
 
         sql = text("""
             SELECT
-                PRIMARYREFERENCE,
+                EDIREFERENCE,
                 EXPECTED_DELIVERYDATE
 
             FROM [BRING].[v_dossiers]
@@ -260,6 +269,11 @@ def fetch_tracking_data(
 
         return row
 
+
+# =====================================================
+# MAIN TRACKING HANDLER
+# =====================================================
+
 def handle_tracking(msg, engine_track, llm, session_id):
 
     if not should_use_tracking(msg, session_id, llm):
@@ -269,6 +283,9 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
     msg = msg.strip()
 
+    # =================================================
+    # CONTINUE FLOW
+    # =================================================
 
     if user_state["waiting_for_continue"]:
 
@@ -305,9 +322,14 @@ def handle_tracking(msg, engine_track, llm, session_id):
             "Ask the user to answer with yes or no."
         )
 
+    # =================================================
+    # ZIPCODE FLOW
+    # =================================================
+
     if user_state["waiting_for_zipcode"]:
 
         tracking_number = user_state["tracking_number"]
+
         try:
 
             row = fetch_tracking_data(
@@ -392,6 +414,10 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
         return f"{response}\n\n{followup}"
 
+    # =================================================
+    # ZIPCODE QUESTION
+    # =================================================
+
     if user_state["waiting_for_zipcode_question"]:
 
         intent = classify_tracking_intent(msg, llm)
@@ -408,6 +434,10 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
         user_state["waiting_for_zipcode_question"] = False
 
+        # =============================================
+        # USER HAS ZIPCODE
+        # =============================================
+
         if intent == "yes":
 
             user_state["waiting_for_zipcode"] = True
@@ -418,12 +448,16 @@ def handle_tracking(msg, engine_track, llm, session_id):
                 "Ask the user to provide the zipcode."
             )
 
+        # =============================================
+        # USER HAS NO ZIPCODE
+        # =============================================
+
         try:
 
             row = fetch_tracking_data(
                 engine_track,
                 tracking_number,
-                include_full=True
+                include_full=False
             )
 
             if not row:
@@ -436,8 +470,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
                     "Tell the user no shipment was found."
                 )
 
-            data = dict(row._mapping)
-
         except Exception as e:
 
             reset_state(session_id)
@@ -447,28 +479,8 @@ def handle_tracking(msg, engine_track, llm, session_id):
         user_state["waiting_for_continue"] = True
 
         response = (
-            f"Bring reference: "
-            f"{data.get('PRIMARYREFERENCE')}\n\n"
-
-            f"Customer reference: "
-            f"{data.get('EDIREFERENCE')}\n\n"
-
-            f"Expected delivery day: "
-            f"{data.get('EXPECTED_DELIVERYDATE')}\n\n"
-
-            f"Sender:\n"
-            f"{data.get('L_NAMELINE1')}\n"
-            f"{data.get('L_ADDRESSLINE1')}\n"
-            f"{data.get('L_ZIPCODE')} "
-            f"{data.get('L_CITY')}\n"
-            f"{data.get('L_COUNTRY_FULL')}\n\n"
-
-            f"Receiver:\n"
-            f"{data.get('U_NAMELINE1')}\n"
-            f"{data.get('U_ADDRESSLINE1')}\n"
-            f"{data.get('U_ZIPCODE')} "
-            f"{data.get('U_CITY')}\n"
-            f"{data.get('U_COUNTRY_FULL')}"
+            f"EDI reference: {row[0]}\n"
+            f"Expected delivery day: {row[1]}"
         )
 
         followup = ai_reply(
@@ -478,6 +490,10 @@ def handle_tracking(msg, engine_track, llm, session_id):
         )
 
         return f"{response}\n\n{followup}"
+
+    # =================================================
+    # TRACKING NUMBER INPUT
+    # =================================================
 
     if (
         user_state["tracking_active"]
@@ -533,6 +549,9 @@ def handle_tracking(msg, engine_track, llm, session_id):
             "Ask the user if they have the zipcode."
         )
 
+    # =================================================
+    # START TRACKING
+    # =================================================
 
     intent = classify_tracking_intent(msg, llm)
 
