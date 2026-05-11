@@ -138,10 +138,6 @@ def answer_question(question: str, session_id: str):
 
     state = get_user_state(session_id)
 
-    # =====================================================
-    # GENERAL CHAT BUTTON
-    # =====================================================
-
     if msg == "Algemene vraag":
 
         state["mode"] = "general"
@@ -155,128 +151,43 @@ def answer_question(question: str, session_id: str):
 
         return answer
 
-    # =====================================================
-    # TRACKING BUTTON
-    # =====================================================
-
-    if msg == "Track & Trace":
-
-        state["mode"] = "tracking"
+    if state["mode"] == "tracking":
 
         tracking_response = handle_tracking(
-            "start_tracking",
+            msg,
             engine_track,
             llm,
             session_id
         )
 
-        append_history(session_id, "user", msg)
+        if tracking_response is not None:
 
-        append_history(
-            session_id,
-            "assistant",
-            str(tracking_response)
-        )
+            append_history(session_id, "user", msg)
 
-        return tracking_response
+            append_history(
+                session_id,
+                "assistant",
+                str(tracking_response)
+            )
 
-    # =====================================================
-    # INTERNAL BUTTON
-    # =====================================================
+            return tracking_response
 
-    if msg == "Interne vraag":
+        if state["mode"] == "internal":
 
-        state["mode"] = "internal"
-
-        answer = "Wat is uw interne vraag?"
-
-        append_history(session_id, "user", msg)
-        append_history(session_id, "assistant", answer)
-
-        return answer
-
-    # =====================================================
-    # TRACKING FLOW
-    # =====================================================
-
-    tracking_response = handle_tracking(
-        msg,
-        engine_track,
-        llm,
-        session_id
-    )
-
-    if tracking_response is not None:
-
-        append_history(session_id, "user", msg)
-
-        append_history(
-            session_id,
-            "assistant",
-            str(tracking_response)
-        )
-
-        return tracking_response
-
-    # =====================================================
-    # HISTORY
-    # =====================================================
-
-    history = get_history(session_id)
-
-    recent_history = history[-30:]
-
-    formatted_context = ""
-
-    for item in recent_history:
-
-        role_name = (
-            "Gebruiker"
-            if item["role"] == "user"
-            else "Assistent"
-        )
-
-        formatted_context += (
-            f"{role_name}: {item['message']}\n"
-        )
-
-    # =====================================================
-    # INTERNAL MODE
-    # =====================================================
-
-    if state["mode"] == "internal":
-
-        prompt = generate_prompt(
-            question=msg,
-            history=formatted_context,
-            schema_info=""
-        )
-
-    # =====================================================
-    # GENERAL MODE
-    # =====================================================
+            prompt = generate_prompt(
+                question=msg,
+                history=formatted_context,
+                schema_info=""
+            )
 
     else:
 
         prompt = f"""
-You are a helpful chatbot.
+    You are a helpful chatbot.
 
-STRICT RULES:
-- Talk naturally
-- Be friendly
-- Reply in the SAME language as the user
-- Never generate SQL
-- Never generate employee lookups
-- Never generate tracking logic
-- Keep responses short and natural
-
-USER MESSAGE:
-{msg}
-"""
-
-    # =====================================================
-    # LLM CALL
-    # =====================================================
+    USER MESSAGE:
+    {msg}
+    """
 
     response = llm.invoke(prompt)
 
@@ -298,9 +209,112 @@ USER MESSAGE:
             .strip()
         )
 
-        # =================================================
-        # LATEST ORDER
-        # =================================================
+        if clean_result.lower().startswith("employee_lookup|"):
+
+            try:
+
+                _, name, field = clean_result.split("|", 2)
+
+                query = f"""
+                SELECT {field}
+                FROM afas.Bring_Employees
+                WHERE
+                    LOWER(FirstName) = LOWER(:name)
+                    OR LOWER(BirthName) = LOWER(:name)
+                """
+
+                with engine_emp.connect() as conn:
+
+                    row = conn.execute(
+                        text(query),
+                        {
+                            "name": name
+                        }
+                    ).fetchone()
+
+                if row:
+
+                    answer = str(row[0])
+
+                else:
+
+                    answer = "Geen gegevens gevonden."
+
+            except Exception as e:
+
+                print("EMPLOYEE LOOKUP ERROR:", e)
+
+                answer = "Database fout."
+
+        else:
+
+            answer = result
+
+        tracking_response = handle_tracking(
+            msg,
+            engine_track,
+            llm,
+            session_id
+        )
+
+        if tracking_response is not None:
+
+            append_history(session_id, "user", msg)
+
+            append_history(
+                session_id,
+                "assistant",
+                str(tracking_response)
+            )
+
+            return tracking_response
+
+    history = get_history(session_id)
+
+    recent_history = history[-30:]
+
+    formatted_context = ""
+
+    for item in recent_history:
+
+        role_name = (
+            "Gebruiker"
+            if item["role"] == "user"
+            else "Assistent"
+        )
+
+        formatted_context += (
+            f"{role_name}: {item['message']}\n"
+        )
+
+    if state["mode"] == "internal":
+
+        prompt = generate_prompt(
+            question=msg,
+            history=formatted_context,
+            schema_info=""
+        )
+
+    response = llm.invoke(prompt)
+
+    if not response or not response.content:
+
+        answer = "Geen antwoord ontvangen."
+
+    else:
+
+        result = response.content.strip()
+
+        print("RAW LLM RESULT:")
+        print(result)
+
+        clean_result = (
+            result
+            .replace("\n", "")
+            .replace("\r", "")
+            .strip()
+        )
+
 
         if clean_result == "LATEST_ORDER":
 
