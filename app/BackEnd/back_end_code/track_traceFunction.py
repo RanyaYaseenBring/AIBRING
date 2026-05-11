@@ -2,11 +2,6 @@ from sqlalchemy import text
 
 session_states = {}
 
-
-# =====================================================
-# STATE MANAGEMENT
-# =====================================================
-
 def create_tracking_state():
 
     return {
@@ -32,27 +27,21 @@ def reset_state(session_id):
 
     session_states[session_id] = create_tracking_state()
 
-
-# =====================================================
-# AI REPLY
-# =====================================================
-
 def ai_reply(llm, user_message, instruction):
 
     prompt = f"""
 You are a logistics assistant.
 
 STRICT RULES:
-- Reply ONLY in the SAME language as the user.
+- Reply ONLY in the SAME language as the USER MESSAGE.
 - NEVER translate.
 - NEVER switch languages.
-- NEVER use Spanish.
-- NEVER use Portuguese.
-- NEVER use German.
-- NEVER use French.
-- NEVER use brackets.
 - Keep responses short and natural.
+- Never use random foreign languages.
 - Output ONLY the final response text.
+- Never explain rules.
+- Never explain translations.
+- Never add extra commentary.
 
 USER MESSAGE:
 {user_message}
@@ -71,10 +60,6 @@ TASK:
 
         return "Something went wrong."
 
-
-# =====================================================
-# INTENT CLASSIFIER
-# =====================================================
 
 def classify_tracking_intent(msg, llm):
 
@@ -95,30 +80,27 @@ RULES:
 - No sentences
 - Never answer conversationally
 - Never translate
-- Never use multiple words
 
 TRACKING EXAMPLES:
 
-"track and trace" -> tracking
-"tracking" -> tracking
-"where is my package" -> tracking
-"where is my shipment" -> tracking
-"pakket volgen" -> tracking
-"zending volgen" -> tracking
-"waar is mijn pakket" -> tracking
-"volg mijn pakket" -> tracking
+track and trace -> tracking
+tracking -> tracking
+where is my package -> tracking
+where is my shipment -> tracking
+pakket volgen -> tracking
+zending volgen -> tracking
+waar is mijn pakket -> tracking
 
 YES EXAMPLES:
 
-"yes" -> yes
-"yeah" -> yes
-"yep" -> yes
-"ja" -> yes
+yes -> yes
+yeah -> yes
+ja -> yes
 
 NO EXAMPLES:
 
-"no" -> no
-"nee" -> no
+no -> no
+nee -> no
 
 USER MESSAGE:
 {msg}
@@ -146,11 +128,6 @@ USER MESSAGE:
 
         return "unknown"
 
-
-# =====================================================
-# SHOULD USE TRACKING
-# =====================================================
-
 def should_use_tracking(msg, session_id, llm):
 
     state = get_user_state(session_id)
@@ -167,11 +144,6 @@ def should_use_tracking(msg, session_id, llm):
     intent = classify_tracking_intent(msg, llm)
 
     return intent == "tracking"
-
-
-# =====================================================
-# DATABASE FETCH
-# =====================================================
 
 def fetch_tracking_data(
     engine_track,
@@ -269,11 +241,6 @@ def fetch_tracking_data(
 
         return row
 
-
-# =====================================================
-# MAIN TRACKING HANDLER
-# =====================================================
-
 def handle_tracking(msg, engine_track, llm, session_id):
 
     if not should_use_tracking(msg, session_id, llm):
@@ -282,10 +249,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
     user_state = get_user_state(session_id)
 
     msg = msg.strip()
-
-    # =================================================
-    # CONTINUE FLOW
-    # =================================================
 
     if user_state["waiting_for_continue"]:
 
@@ -319,12 +282,9 @@ def handle_tracking(msg, engine_track, llm, session_id):
         return ai_reply(
             llm,
             msg,
-            "Ask the user to answer with yes or no."
+            "Ask the user to answer yes or no."
         )
 
-    # =================================================
-    # ZIPCODE FLOW
-    # =================================================
 
     if user_state["waiting_for_zipcode"]:
 
@@ -409,14 +369,10 @@ def handle_tracking(msg, engine_track, llm, session_id):
         followup = ai_reply(
             llm,
             msg,
-            "Ask the user if they want anything else."
+            "Ask the user if they need anything else."
         )
 
         return f"{response}\n\n{followup}"
-
-    # =================================================
-    # ZIPCODE QUESTION
-    # =================================================
 
     if user_state["waiting_for_zipcode_question"]:
 
@@ -434,10 +390,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
         user_state["waiting_for_zipcode_question"] = False
 
-        # =============================================
-        # USER HAS ZIPCODE
-        # =============================================
-
         if intent == "yes":
 
             user_state["waiting_for_zipcode"] = True
@@ -447,10 +399,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
                 msg,
                 "Ask the user to provide the zipcode."
             )
-
-        # =============================================
-        # USER HAS NO ZIPCODE
-        # =============================================
 
         try:
 
@@ -486,14 +434,10 @@ def handle_tracking(msg, engine_track, llm, session_id):
         followup = ai_reply(
             llm,
             msg,
-            "Ask the user if they want anything else."
+            "Ask the user if they need anything else."
         )
 
         return f"{response}\n\n{followup}"
-
-    # =================================================
-    # TRACKING NUMBER INPUT
-    # =================================================
 
     if (
         user_state["tracking_active"]
@@ -548,10 +492,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
             msg,
             "Ask the user if they have the zipcode."
         )
-
-    # =================================================
-    # START TRACKING
-    # =================================================
 
     intent = classify_tracking_intent(msg, llm)
 
