@@ -142,11 +142,6 @@ USER MESSAGE:
 
         return "unknown"
 
-
-# =====================================================
-# SHOULD USE TRACKING
-# =====================================================
-
 def should_use_tracking(msg, session_id, llm):
 
     state = get_user_state(session_id)
@@ -163,11 +158,6 @@ def should_use_tracking(msg, session_id, llm):
     intent = classify_tracking_intent(msg, llm)
 
     return intent == "tracking"
-
-
-# =====================================================
-# DATABASE FETCH
-# =====================================================
 
 def fetch_tracking_data(
     engine_track,
@@ -265,11 +255,6 @@ def fetch_tracking_data(
 
         return row
 
-
-# =====================================================
-# MAIN TRACKING HANDLER
-# =====================================================
-
 def handle_tracking(msg, engine_track, llm, session_id):
 
     if not should_use_tracking(msg, session_id, llm):
@@ -279,9 +264,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
     msg = msg.strip()
 
-    # =================================================
-    # CONTINUE FLOW
-    # =================================================
 
     if user_state["waiting_for_continue"]:
 
@@ -318,14 +300,9 @@ def handle_tracking(msg, engine_track, llm, session_id):
             "Ask the user to answer with yes or no."
         )
 
-    # =================================================
-    # ZIPCODE FLOW
-    # =================================================
-
     if user_state["waiting_for_zipcode"]:
 
         tracking_number = user_state["tracking_number"]
-
         try:
 
             row = fetch_tracking_data(
@@ -409,10 +386,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
         )
 
         return f"{response}\n\n{followup}"
-
-    # =================================================
-    # ZIPCODE QUESTION
-    # =================================================
 
     if user_state["waiting_for_zipcode_question"]:
 
@@ -501,10 +474,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
         return f"{response}\n\n{followup}"
 
-    # =================================================
-    # TRACKING NUMBER INPUT
-    # =================================================
-
     if (
         user_state["tracking_active"]
         and user_state["waiting_for_tracking_number"]
@@ -559,9 +528,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
             "Ask the user if they have the zipcode."
         )
 
-    # =================================================
-    # START TRACKING
-    # =================================================
 
     intent = classify_tracking_intent(msg, llm)
 
