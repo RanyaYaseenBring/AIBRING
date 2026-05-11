@@ -112,6 +112,7 @@ def reset_state(session_id: str):
 
     chat_sessions[session_id] = create_empty_state()
 
+
 def append_history(session_id: str, role: str, message: str):
 
     state = get_user_state(session_id)
@@ -137,6 +138,10 @@ def answer_question(question: str, session_id: str):
 
     state = get_user_state(session_id)
 
+    # =====================================================
+    # GENERAL CHAT BUTTON
+    # =====================================================
+
     if msg == "Algemene vraag":
 
         state["mode"] = "general"
@@ -149,6 +154,10 @@ def answer_question(question: str, session_id: str):
         append_history(session_id, "assistant", answer)
 
         return answer
+
+    # =====================================================
+    # TRACKING BUTTON
+    # =====================================================
 
     if msg == "Track & Trace":
 
@@ -171,18 +180,24 @@ def answer_question(question: str, session_id: str):
 
         return tracking_response
 
+    # =====================================================
+    # INTERNAL BUTTON
+    # =====================================================
+
     if msg == "Interne vraag":
 
         state["mode"] = "internal"
 
-        answer = (
-            "Wat is uw interne vraag?"
-        )
+        answer = "Wat is uw interne vraag?"
 
         append_history(session_id, "user", msg)
         append_history(session_id, "assistant", answer)
 
         return answer
+
+    # =====================================================
+    # TRACKING FLOW
+    # =====================================================
 
     tracking_response = handle_tracking(
         msg,
@@ -203,6 +218,10 @@ def answer_question(question: str, session_id: str):
 
         return tracking_response
 
+    # =====================================================
+    # HISTORY
+    # =====================================================
+
     history = get_history(session_id)
 
     recent_history = history[-30:]
@@ -221,17 +240,23 @@ def answer_question(question: str, session_id: str):
             f"{role_name}: {item['message']}\n"
         )
 
-    full_input = (
-        f"Context van het gesprek:\n"
-        f"{formatted_context}\n"
-        f"Nieuwe vraag: {msg}"
-    )
+    # =====================================================
+    # INTERNAL MODE
+    # =====================================================
 
     if state["mode"] == "internal":
 
-        prompt = generate_prompt(full_input)
+        prompt = generate_prompt(
+            question=msg,
+            history=formatted_context,
+            schema_info=""
+        )
 
-    elif state["mode"] == "general":
+    # =====================================================
+    # GENERAL MODE
+    # =====================================================
+
+    else:
 
         prompt = f"""
 You are a helpful chatbot.
@@ -249,9 +274,9 @@ USER MESSAGE:
 {msg}
 """
 
-    else:
-
-        prompt = generate_prompt(full_input)
+    # =====================================================
+    # LLM CALL
+    # =====================================================
 
     response = llm.invoke(prompt)
 
@@ -263,69 +288,73 @@ USER MESSAGE:
 
         result = response.content.strip()
 
-        if result == "LATEST_ORDER":
+        print("RAW LLM RESULT:")
+        print(result)
+
+        clean_result = (
+            result
+            .replace("\n", "")
+            .replace("\r", "")
+            .strip()
+        )
+
+        # =================================================
+        # LATEST ORDER
+        # =================================================
+
+        if clean_result == "LATEST_ORDER":
 
             answer = get_latest_order(engine_track)
 
-        elif result.startswith("employee_lookup|"):
+        # =================================================
+        # EMPLOYEE LOOKUP
+        # =================================================
+
+        elif clean_result.lower().startswith("employee_lookup|"):
 
             try:
 
-                _, name, field = result.split("|", 2)
+                _, name, field = clean_result.split("|", 2)
 
-                if field == "Address":
-
-                    query = """
-                    SELECT
-                        street,
-                        HouseNumber,
-                        ZIPCODE,
-                        Country
-                    FROM afas.Bring_Employees
-                    WHERE FirstName = :name
-                    """
-
-                else:
-
-                    query = f"""
-                    SELECT {field}
-                    FROM afas.Bring_Employees
-                    WHERE FirstName = :name
-                    """
+                query = f"""
+                SELECT {field}
+                FROM afas.Bring_Employees
+                WHERE
+                    LOWER(FirstName) = LOWER(:name)
+                    OR LOWER(BirthName) = LOWER(:name)
+                """
 
                 with engine_emp.connect() as conn:
 
                     row = conn.execute(
                         text(query),
-                        {"name": name}
+                        {
+                            "name": name
+                        }
                     ).fetchone()
 
                 if row:
 
-                    if field == "Address":
-
-                        answer = (
-                            f"{row[0]} {row[1]}, "
-                            f"{row[2]}, {row[3]}"
-                        )
-
-                    else:
-
-                        answer = str(row[0])
+                    answer = str(row[0])
 
                 else:
 
                     answer = (
-                        f"Ik kon geen gegevens vinden "
-                        f"voor {name}."
+                        f"Geen gegevens gevonden voor {name}."
                     )
 
-            except Exception:
+            except Exception as e:
+
+                print("EMPLOYEE LOOKUP ERROR:", e)
 
                 answer = (
                     "Er trad een fout op bij "
-                    "het zoeken naar de medewerker."
+                    "het ophalen van medewerkergegevens."
                 )
+
+        # =================================================
+        # NORMAL RESPONSE
+        # =================================================
 
         else:
 
@@ -341,10 +370,12 @@ USER MESSAGE:
 
     return answer
 
+
 class ChatReq(BaseModel):
 
     message: str
     session_id: str | None = None
+
 
 @app.post("/chat")
 async def chat(req: ChatReq):
@@ -408,6 +439,7 @@ async def websocket_latest_order(websocket: WebSocket):
             print("WS ERROR:", e)
 
             break
+
 
 if __name__ == "__main__":
 
