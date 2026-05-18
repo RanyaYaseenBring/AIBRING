@@ -180,170 +180,87 @@ def answer_question(question: str, session_id: str):
     if state["mode"] == "internal":
 
         prompt = f"""
-Your ONLY task is detecting employee lookup requests.
+You are a parser.
 
-If the user asks for employee information,
-return ONLY:
+You are NOT a chatbot.
+
+Return ONLY one of these formats:
 
 employee_lookup|name|field
-
-If the message is NOT an employee lookup request,
-return ONLY:
-
 normal_chat
+missing_name
+
+Never explain anything.
+No extra text.
+No reasoning.
+No notes.
+No markdown.
 
 VALID FIELDS:
 
 Mobile
 Mail
-DateOfBirth
 FunctionDesc
+DateOfBirth
 EmploymentStart
 Street
 ZIPCode
 HouseNumber
+City
 
 FIELD MAPPING:
 
 telefoon -> Mobile
-phone -> Mobile
-nummer -> Mobile
+telefoonnummer -> Mobile
 mobiel -> Mobile
 mobile -> Mobile
-telefoonnummer -> Mobile
+phone -> Mobile
 
 email -> Mail
 mail -> Mail
-e-mail -> Mail
-emailadres -> Mail
 
 functie -> FunctionDesc
 job -> FunctionDesc
-rol -> FunctionDesc
-werk -> FunctionDesc
 
 verjaardag -> DateOfBirth
 birthday -> DateOfBirth
-geboortedatum -> DateOfBirth
 
 startdatum -> EmploymentStart
-begindatum -> EmploymentStart
-in dienst -> EmploymentStart
 
 straatnaam -> Street
+straat -> Street
 street -> Street
-streetname -> Street
 
 postcode -> ZIPCode
 zipcode -> ZIPCode
-zip code -> ZIPCode
 
 huisnummer -> HouseNumber
-house number -> HouseNumber
-housenumber -> HouseNumber
 
-RULES:
+stad -> City
+city -> City
 
-- ONLY output:
-employee_lookup|name|field
+If the user asks employee information
+but no employee name is present:
 
-OR:
-normal_chat
+return:
+missing_name
 
-- NEVER explain
-- NEVER answer naturally
-- NEVER act like an AI chatbot
-- NO markdown
-- NO extra text
-- NO privacy warnings
-- NO chatbot behavior
+Examples:
 
-EXAMPLES:
-
-User:
 wat is het telefoonnummer van ranya
-
-Output:
 employee_lookup|ranya|Mobile
 
-User:
 wat is de email van mike
-
-Output:
 employee_lookup|mike|Mail
 
-User:
 wat is de straatnaam van ranya
-
-Output:
 employee_lookup|ranya|Street
 
-User:
-wat is de postcode van mike
+wat is de stad van ranya
+employee_lookup|ranya|City
 
-Output:
-employee_lookup|mike|ZIPCode
-
-User:
-wat is het huisnummer van ranya
-
-Output:
-employee_lookup|ranya|HouseNumber
-
-User:
-wat is de functie van mike
-
-Output:
-employee_lookup|mike|FunctionDesc
-
-User:
-wanneer is ranya begonnen
-
-Output:
-employee_lookup|ranya|EmploymentStart
-
-User:
-hoi
-
-Output:
-normal_chat
-
-IMPORTANT:
-
-If the user asks for employee information
-but NO employee name is present,
-return ONLY:
-missing_name
-
-EXAMPLES:
-
-User:
 wat is het huisnummer
-
-Output:
 missing_name
-
-User:
-wat is de straatnaam
-
-Output:
-missing_name
-
-straatnaam -> Address
-street -> Address
-streetname -> Address
-
-postcode -> Address
-zipcode -> Address
-zip code -> Address
-
-huisnummer -> Address
-house number -> Address
-housenumber -> Address
-
-adres -> Address
-address -> Address
-woonadres -> Address
 
 USER MESSAGE:
 {msg}
@@ -351,9 +268,6 @@ USER MESSAGE:
     if prompt is None:
 
         return "Prompt was None"
-
-    print("MODE:", state["mode"])
-    print("PROMPT TYPE:", type(prompt))
 
     response = llm.invoke(prompt)
 
@@ -373,19 +287,73 @@ USER MESSAGE:
         .strip()
     )
 
+    TABLE_GROUPS = {
+
+    "employees": [
+        "afas.Bring_Employees",
+        "afas.Profit_Employees",
+        "afas.Profit_Users",
+        "afas.Profit_UserGroups"
+    ],
+
+    "employee_details": [
+        "afas.Bring_Medewerker_Functie",
+        "afas.Bring_Medewerker_Contract",
+        "afas.Bring_Medewerker_Salaris",
+        "afas.Bring_Verzuim",
+        "afas.Bring_LeaveTypes",
+        "afas.Profit_LeaveBalance"
+    ],
+
+    "finance": [
+        "afas.Bring_FinancieleMutaties_ESJ",
+        "afas.Bring_Debtor_Invoices",
+        "afas.Profit_Debtor",
+        "afas.Profit_Journals"
+    ],
+
+    "organization": [
+        "afas.Bring_KNOrganisation"
+    ],
+
+    "workflow": [
+        "afas.Bring_workflow_log"
+    ],
+
+    "logs": [
+        "_logs.ProcesssingLog",
+        "_logs.EtlRunLog"
+    ],
+
+    "system": [
+        "_etl.APITokens",
+        "_etl.Data_processor",
+        "_etl.EndpointConfig"
+    ],
+
+    "LSP": [
+        "dbo.Tally",
+        "LSP_NL.bcnl_edirefs",
+        "LSP_NL.peppol_lijn12"
+    ]
+}
+
     if clean_result.lower().startswith("employee_lookup|"):
 
         try:
 
             _, name, field = clean_result.split("|", 2)
-
             allowed_fields = {
-                "Mobile",
-                "Mail",
-                "DateOfBirth",
-                "FunctionDesc",
-                "EmploymentStart"
-            }
+            "Mobile",
+            "Mail",
+            "FunctionDesc",
+            "DateOfBirth",
+            "EmploymentStart",
+            "Street",
+            "ZIPCode",
+            "HouseNumber",
+            "City"
+        }
 
             if field not in allowed_fields:
 
@@ -428,7 +396,6 @@ class ChatReq(BaseModel):
 
     message: str
     session_id: str | None = None
-
 
 @app.post("/chat")
 async def chat(req: ChatReq):
@@ -493,9 +460,7 @@ async def websocket_latest_order(websocket: WebSocket):
             break
 
 if __name__ == "__main__":
-
     import uvicorn
-
     uvicorn.run(
         app,
         host="127.0.0.1",
