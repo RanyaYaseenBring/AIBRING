@@ -12,7 +12,6 @@ from sqlalchemy import create_engine, text
 from langchain_ollama import ChatOllama
 
 from ChatBotMemory import save_chat_memory
-from ChatbotPrompt import generate_prompt
 from track_traceFunction import handle_tracking
 from latest_order import get_latest_order
 
@@ -27,6 +26,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 def make_engine(server, database, username, password):
 
@@ -62,6 +62,10 @@ engine_track = make_engine(
     "GB94QV4e48NH8Vz"
 )
 
+# =====================================================
+# LLM
+# =====================================================
+
 username_llm = "ITSupport"
 password_llm = "blistering-plafond-useless"
 
@@ -78,14 +82,18 @@ headers = {
 llm = ChatOllama(
     model="llama3.1:latest",
     temperature=0,
+    num_ctx=512,
     base_url="http://172.20.20.181:11434",
     headers=headers
 )
 
+# =====================================================
+# SESSION STATE
+# =====================================================
+
 def create_empty_state():
 
     return {
-        "history": [],
         "mode": "general",
 
         "tracking": {
@@ -112,44 +120,47 @@ def reset_state(session_id: str):
 
     chat_sessions[session_id] = create_empty_state()
 
-
-def append_history(session_id: str, role: str, message: str):
-
-    state = get_user_state(session_id)
-
-    state["history"].append({
-        "role": role,
-        "message": message
-    })
-
-    if len(state["history"]) > 20:
-
-        state["history"] = state["history"][-20:]
-
-
-def get_history(session_id: str):
-
-    return get_user_state(session_id)["history"]
-
+# =====================================================
+# MAIN CHAT FUNCTION
+# =====================================================
 
 def answer_question(question: str, session_id: str):
 
     msg = question.strip()
+    msg_lower = msg.lower()
 
     state = get_user_state(session_id)
 
-    if msg == "Algemene vraag":
+    # =================================================
+    # BUTTONS
+    # =================================================
+
+    if msg_lower in ["algemene vraag", "algemene_vraag"]:
 
         state["mode"] = "general"
 
-        answer = (
-            "Hallo! Hoe kan ik u vandaag helpen?"
+        return "Hallo! Hoe kan ik u vandaag helpen?"
+
+    if msg_lower in ["track & trace", "track_trace"]:
+
+        state["mode"] = "tracking"
+
+        return handle_tracking(
+            "start_tracking",
+            engine_track,
+            llm,
+            session_id
         )
 
-        append_history(session_id, "user", msg)
-        append_history(session_id, "assistant", answer)
+    if msg_lower in ["interne vraag", "interne_vraag"]:
 
-        return answer
+        state["mode"] = "internal"
+
+        return "Wat is uw interne vraag?"
+
+    # =================================================
+    # TRACKING FLOW
+    # =================================================
 
     if state["mode"] == "tracking":
 
@@ -162,228 +173,205 @@ def answer_question(question: str, session_id: str):
 
         if tracking_response is not None:
 
-            append_history(session_id, "user", msg)
-
-            append_history(
-                session_id,
-                "assistant",
-                str(tracking_response)
-            )
-
             return tracking_response
 
-        if state["mode"] == "internal":
+    # =================================================
+    # PROMPT
+    # =================================================
 
-            prompt = generate_prompt(
-                question=msg,
-                history=formatted_context,
-                schema_info=""
-            )
+    prompt = ""
+
+    # =================================================
+    # INTERNAL MODE
+    # =================================================
+
+    if state["mode"] == "internal":
+
+        prompt = f"""
+Your ONLY task is detecting employee lookup requests.
+
+If the user asks for employee information,
+return ONLY:
+
+employee_lookup|name|field
+
+If the message is NOT an employee lookup request,
+return ONLY:
+
+normal_chat
+
+VALID FIELDS:
+
+Mobile
+Mail
+DateOfBirth
+FunctionDesc
+EmploymentStart
+
+FIELD MAPPING:
+
+telefoon -> Mobile
+phone -> Mobile
+nummer -> Mobile
+mobile -> Mobile
+
+email -> Mail
+mail -> Mail
+
+functie -> FunctionDesc
+job -> FunctionDesc
+
+verjaardag -> DateOfBirth
+birthday -> DateOfBirth
+
+startdatum -> EmploymentStart
+
+RULES:
+
+- ONLY output:
+employee_lookup|name|field
+
+OR:
+normal_chat
+
+- NEVER explain
+- NO markdown
+- NO extra text
+
+EXAMPLES:
+
+User:
+wat is het telefoonnummer van ranya
+
+Output:
+employee_lookup|ranya|Mobile
+
+User:
+wat is de email van mike
+
+Output:
+employee_lookup|mike|Mail
+
+User:
+hoi
+
+Output:
+normal_chat
+
+USER MESSAGE:
+{msg}
+"""
+
+    # =================================================
+    # GENERAL MODE
+    # =================================================
 
     else:
 
         prompt = f"""
-    You are a helpful chatbot.
+You are a helpful logistics chatbot.
 
-    USER MESSAGE:
-    {msg}
-    """
+Answer shortly and naturally.
 
-    response = llm.invoke(prompt)
+USER MESSAGE:
+{msg}
+"""
 
-    if not response or not response.content:
+    # =================================================
+    # SAFETY CHECK
+    # =================================================
 
-        answer = "Geen antwoord ontvangen."
+    if prompt is None:
 
-    else:
+        return "Prompt was None"
 
-        result = response.content.strip()
+    print("MODE:", state["mode"])
+    print("PROMPT TYPE:", type(prompt))
 
-        print("RAW LLM RESULT:")
-        print(result)
-
-        clean_result = (
-            result
-            .replace("\n", "")
-            .replace("\r", "")
-            .strip()
-        )
-
-        if clean_result.lower().startswith("employee_lookup|"):
-
-            try:
-
-                _, name, field = clean_result.split("|", 2)
-
-                query = f"""
-                SELECT {field}
-                FROM afas.Bring_Employees
-                WHERE
-                    LOWER(FirstName) = LOWER(:name)
-                    OR LOWER(BirthName) = LOWER(:name)
-                """
-
-                with engine_emp.connect() as conn:
-
-                    row = conn.execute(
-                        text(query),
-                        {
-                            "name": name
-                        }
-                    ).fetchone()
-
-                if row:
-
-                    answer = str(row[0])
-
-                else:
-
-                    answer = "Geen gegevens gevonden."
-
-            except Exception as e:
-
-                print("EMPLOYEE LOOKUP ERROR:", e)
-
-                answer = "Database fout."
-
-        else:
-
-            answer = result
-
-        tracking_response = handle_tracking(
-            msg,
-            engine_track,
-            llm,
-            session_id
-        )
-
-        if tracking_response is not None:
-
-            append_history(session_id, "user", msg)
-
-            append_history(
-                session_id,
-                "assistant",
-                str(tracking_response)
-            )
-
-            return tracking_response
-
-    history = get_history(session_id)
-
-    recent_history = history[-30:]
-
-    formatted_context = ""
-
-    for item in recent_history:
-
-        role_name = (
-            "Gebruiker"
-            if item["role"] == "user"
-            else "Assistent"
-        )
-
-        formatted_context += (
-            f"{role_name}: {item['message']}\n"
-        )
-
-    if state["mode"] == "internal":
-
-        prompt = generate_prompt(
-            question=msg,
-            history=formatted_context,
-            schema_info=""
-        )
+    # =================================================
+    # LLM
+    # =================================================
 
     response = llm.invoke(prompt)
 
     if not response or not response.content:
 
-        answer = "Geen antwoord ontvangen."
+        return "Geen antwoord ontvangen."
 
-    else:
+    result = response.content.strip()
 
-        result = response.content.strip()
+    print("RAW LLM RESULT:")
+    print(result)
 
-        print("RAW LLM RESULT:")
-        print(result)
-
-        clean_result = (
-            result
-            .replace("\n", "")
-            .replace("\r", "")
-            .strip()
-        )
-
-
-        if clean_result == "LATEST_ORDER":
-
-            answer = get_latest_order(engine_track)
-
-        # =================================================
-        # EMPLOYEE LOOKUP
-        # =================================================
-
-        elif clean_result.lower().startswith("employee_lookup|"):
-
-            try:
-
-                _, name, field = clean_result.split("|", 2)
-
-                query = f"""
-                SELECT {field}
-                FROM afas.Bring_Employees
-                WHERE
-                    LOWER(FirstName) = LOWER(:name)
-                    OR LOWER(BirthName) = LOWER(:name)
-                """
-
-                with engine_emp.connect() as conn:
-
-                    row = conn.execute(
-                        text(query),
-                        {
-                            "name": name
-                        }
-                    ).fetchone()
-
-                if row:
-
-                    answer = str(row[0])
-
-                else:
-
-                    answer = (
-                        f"Geen gegevens gevonden voor {name}."
-                    )
-
-            except Exception as e:
-
-                print("EMPLOYEE LOOKUP ERROR:", e)
-
-                answer = (
-                    "Er trad een fout op bij "
-                    "het ophalen van medewerkergegevens."
-                )
-
-        # =================================================
-        # NORMAL RESPONSE
-        # =================================================
-
-        else:
-
-            answer = result
-
-    append_history(session_id, "user", msg)
-
-    append_history(
-        session_id,
-        "assistant",
-        str(answer)
+    clean_result = (
+        result
+        .replace("\n", "")
+        .replace("\r", "")
+        .strip()
     )
 
-    return answer
+    # =================================================
+    # EMPLOYEE LOOKUP
+    # =================================================
 
+    if clean_result.lower().startswith("employee_lookup|"):
+
+        try:
+
+            _, name, field = clean_result.split("|", 2)
+
+            allowed_fields = {
+                "Mobile",
+                "Mail",
+                "DateOfBirth",
+                "FunctionDesc",
+                "EmploymentStart"
+            }
+
+            if field not in allowed_fields:
+
+                return "Ongeldig veld."
+
+            query = f"""
+            SELECT TOP 1 {field}
+            FROM afas.Bring_Employees
+            WHERE
+                LOWER(FirstName) = LOWER(:name)
+                OR LOWER(BirthName) = LOWER(:name)
+            """
+
+            print("SQL QUERY:")
+            print(query)
+
+            with engine_emp.connect() as conn:
+
+                row = conn.execute(
+                    text(query),
+                    {"name": name}
+                ).fetchone()
+
+            if row and row[0]:
+
+                return str(row[0])
+
+            return "Geen gegevens gevonden."
+
+        except Exception as e:
+
+            print("EMPLOYEE LOOKUP ERROR:")
+            print(e)
+
+            return "Database fout."
+
+    # =================================================
+    # NORMAL RETURN
+    # =================================================
+
+    return result
+
+# =====================================================
+# API
+# =====================================================
 
 class ChatReq(BaseModel):
 
@@ -424,6 +412,9 @@ async def reset_chat(session_id: str):
         "session_id": session_id
     }
 
+# =====================================================
+# WEBSOCKET
+# =====================================================
 
 @app.websocket("/ws/latest-order")
 async def websocket_latest_order(websocket: WebSocket):
@@ -454,6 +445,9 @@ async def websocket_latest_order(websocket: WebSocket):
 
             break
 
+# =====================================================
+# START
+# =====================================================
 
 if __name__ == "__main__":
 
