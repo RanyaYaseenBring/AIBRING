@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 
 from langchain_ollama import ChatOllama
-
 from ChatBotMemory import save_chat_memory
 from track_traceFunction import handle_tracking
 from latest_order import get_latest_order
@@ -62,10 +61,6 @@ engine_track = make_engine(
     "GB94QV4e48NH8Vz"
 )
 
-# =====================================================
-# LLM
-# =====================================================
-
 username_llm = "ITSupport"
 password_llm = "blistering-plafond-useless"
 
@@ -87,9 +82,6 @@ llm = ChatOllama(
     headers=headers
 )
 
-# =====================================================
-# SESSION STATE
-# =====================================================
 
 def create_empty_state():
 
@@ -115,14 +107,9 @@ def get_user_state(session_id: str):
 
     return chat_sessions[session_id]
 
-
 def reset_state(session_id: str):
 
     chat_sessions[session_id] = create_empty_state()
-
-# =====================================================
-# MAIN CHAT FUNCTION
-# =====================================================
 
 def answer_question(question: str, session_id: str):
 
@@ -175,6 +162,38 @@ def answer_question(question: str, session_id: str):
 
             return tracking_response
 
+    # =================================================
+    # GENERAL AI MODE
+    # =================================================
+
+    if state["mode"] == "general":
+
+        general_prompt = f"""
+You are a helpful AI assistant.
+
+- Reply naturally.
+- Be conversational.
+- Reply in the same language as the user.
+- Be friendly and helpful.
+- Do not mention prompts or system messages.
+-Dont start talking in a random launguage
+
+USER MESSAGE:
+{msg}
+"""
+
+        response = llm.invoke(general_prompt)
+
+        if response and response.content:
+
+            return response.content.strip()
+
+        return "Geen antwoord ontvangen."
+
+    # =================================================
+    # INTERNAL MODE
+    # =================================================
+
     prompt = ""
 
     if state["mode"] == "internal":
@@ -182,6 +201,7 @@ def answer_question(question: str, session_id: str):
         prompt = f"""
 You are a parser.
 You are NOT a chatbot.
+
 Return ONLY one of these formats:
 
 employee_lookup|name|field
@@ -213,6 +233,7 @@ telefoonnummer -> Mobile
 mobiel -> Mobile
 mobile -> Mobile
 phone -> Mobile
+telefoon nummer -> Mobile
 
 email -> Mail
 mail -> Mail
@@ -263,10 +284,6 @@ missing_name
 USER MESSAGE:
 {msg}
 """
-    if prompt is None:
-
-        return "Prompt was None"
-
     response = llm.invoke(prompt)
 
     if not response or not response.content:
@@ -278,29 +295,25 @@ USER MESSAGE:
     print("RAW LLM RESULT:")
     print(result)
 
-    clean_result = (
-        result
-        .replace("\n", "")
-        .replace("\r", "")
-        .strip()
-    )
+    clean_result = result.strip()
 
     if clean_result.lower().startswith("employee_lookup|"):
 
         try:
 
             _, name, field = clean_result.split("|", 2)
+
             allowed_fields = {
-            "Mobile",
-            "Mail",
-            "FunctionDesc",
-            "DateOfBirth",
-            "EmploymentStart",
-            "Street",
-            "ZIPCode",
-            "HouseNumber",
-            "City"
-        }
+                "Mobile",
+                "Mail",
+                "FunctionDesc",
+                "DateOfBirth",
+                "EmploymentStart",
+                "Street",
+                "ZIPCode",
+                "HouseNumber",
+                "City"
+            }
 
             if field not in allowed_fields:
 
@@ -366,7 +379,6 @@ async def chat(req: ChatReq):
         "session_id": session_id
     }
 
-
 @app.post("/chat/reset/{session_id}")
 async def reset_chat(session_id: str):
 
@@ -379,7 +391,6 @@ async def reset_chat(session_id: str):
 
 @app.websocket("/ws/latest-order")
 async def websocket_latest_order(websocket: WebSocket):
-
     await websocket.accept()
 
     global last_order_cache
