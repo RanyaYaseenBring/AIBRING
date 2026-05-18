@@ -156,7 +156,7 @@ def answer_question(question: str, session_id: str):
 
         state["mode"] = "internal"
 
-        return "Wat is uw interne vraag?"
+        return "Wat is je vraag?"
 
     # =================================================
     # TRACKING FLOW
@@ -175,15 +175,7 @@ def answer_question(question: str, session_id: str):
 
             return tracking_response
 
-    # =================================================
-    # PROMPT
-    # =================================================
-
     prompt = ""
-
-    # =================================================
-    # INTERNAL MODE
-    # =================================================
 
     if state["mode"] == "internal":
 
@@ -207,24 +199,48 @@ Mail
 DateOfBirth
 FunctionDesc
 EmploymentStart
+Street
+ZIPCode
+HouseNumber
 
 FIELD MAPPING:
 
 telefoon -> Mobile
 phone -> Mobile
 nummer -> Mobile
+mobiel -> Mobile
 mobile -> Mobile
+telefoonnummer -> Mobile
 
 email -> Mail
 mail -> Mail
+e-mail -> Mail
+emailadres -> Mail
 
 functie -> FunctionDesc
 job -> FunctionDesc
+rol -> FunctionDesc
+werk -> FunctionDesc
 
 verjaardag -> DateOfBirth
 birthday -> DateOfBirth
+geboortedatum -> DateOfBirth
 
 startdatum -> EmploymentStart
+begindatum -> EmploymentStart
+in dienst -> EmploymentStart
+
+straatnaam -> Street
+street -> Street
+streetname -> Street
+
+postcode -> ZIPCode
+zipcode -> ZIPCode
+zip code -> ZIPCode
+
+huisnummer -> HouseNumber
+house number -> HouseNumber
+housenumber -> HouseNumber
 
 RULES:
 
@@ -235,8 +251,12 @@ OR:
 normal_chat
 
 - NEVER explain
+- NEVER answer naturally
+- NEVER act like an AI chatbot
 - NO markdown
 - NO extra text
+- NO privacy warnings
+- NO chatbot behavior
 
 EXAMPLES:
 
@@ -253,44 +273,87 @@ Output:
 employee_lookup|mike|Mail
 
 User:
+wat is de straatnaam van ranya
+
+Output:
+employee_lookup|ranya|Street
+
+User:
+wat is de postcode van mike
+
+Output:
+employee_lookup|mike|ZIPCode
+
+User:
+wat is het huisnummer van ranya
+
+Output:
+employee_lookup|ranya|HouseNumber
+
+User:
+wat is de functie van mike
+
+Output:
+employee_lookup|mike|FunctionDesc
+
+User:
+wanneer is ranya begonnen
+
+Output:
+employee_lookup|ranya|EmploymentStart
+
+User:
 hoi
 
 Output:
 normal_chat
 
+IMPORTANT:
+
+If the user asks for employee information
+but NO employee name is present,
+return ONLY:
+missing_name
+
+EXAMPLES:
+
+User:
+wat is het huisnummer
+
+Output:
+missing_name
+
+User:
+wat is de straatnaam
+
+Output:
+missing_name
+
+straatnaam -> Address
+street -> Address
+streetname -> Address
+
+postcode -> Address
+zipcode -> Address
+zip code -> Address
+
+huisnummer -> Address
+house number -> Address
+housenumber -> Address
+
+adres -> Address
+address -> Address
+woonadres -> Address
+
 USER MESSAGE:
 {msg}
 """
-
-    # =================================================
-    # GENERAL MODE
-    # =================================================
-
-    else:
-
-        prompt = f"""
-You are a helpful logistics chatbot.
-
-Answer shortly and naturally.
-
-USER MESSAGE:
-{msg}
-"""
-
-    # =================================================
-    # SAFETY CHECK
-    # =================================================
-
     if prompt is None:
 
         return "Prompt was None"
 
     print("MODE:", state["mode"])
     print("PROMPT TYPE:", type(prompt))
-
-    # =================================================
-    # LLM
-    # =================================================
 
     response = llm.invoke(prompt)
 
@@ -309,10 +372,6 @@ USER MESSAGE:
         .replace("\r", "")
         .strip()
     )
-
-    # =================================================
-    # EMPLOYEE LOOKUP
-    # =================================================
 
     if clean_result.lower().startswith("employee_lookup|"):
 
@@ -363,15 +422,7 @@ USER MESSAGE:
 
             return "Database fout."
 
-    # =================================================
-    # NORMAL RETURN
-    # =================================================
-
     return result
-
-# =====================================================
-# API
-# =====================================================
 
 class ChatReq(BaseModel):
 
@@ -412,10 +463,6 @@ async def reset_chat(session_id: str):
         "session_id": session_id
     }
 
-# =====================================================
-# WEBSOCKET
-# =====================================================
-
 @app.websocket("/ws/latest-order")
 async def websocket_latest_order(websocket: WebSocket):
 
@@ -444,10 +491,6 @@ async def websocket_latest_order(websocket: WebSocket):
             print("WS ERROR:", e)
 
             break
-
-# =====================================================
-# START
-# =====================================================
 
 if __name__ == "__main__":
 
