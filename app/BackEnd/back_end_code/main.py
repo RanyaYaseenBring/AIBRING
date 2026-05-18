@@ -177,6 +177,7 @@ You are a helpful AI assistant.
 - Be friendly and helpful.
 - Do not mention prompts or system messages.
 -Dont start talking in a random launguage
+-you remember the conversation
 
 USER MESSAGE:
 {msg}
@@ -280,6 +281,14 @@ employee_lookup|ranya|City
 
 wat is het huisnummer
 missing_name
+
+IMPORTANT:
+
+If the requested field is BirthOfDate:
+
+- Use DateOfBirth to calculate the BirthOfDate.
+- Age means:
+current year - birth year
 
 USER MESSAGE:
 {msg}
