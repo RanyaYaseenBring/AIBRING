@@ -11,83 +11,157 @@ function cleanBotAnswer(answer) {
 }
 
 function App() {
+
   const [text, setText] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const [hasSelectedOption, setHasSelectedOption] =
+    useState(false);
+
   const chatBodyRef = useRef(null);
+
   const hasStarted = useRef(false);
 
   useEffect(() => {
+
     if (chatBodyRef.current) {
+
       chatBodyRef.current.scrollTop =
         chatBodyRef.current.scrollHeight;
     }
+
   }, [messages, loading]);
 
   useEffect(() => {
+
     if (hasStarted.current) return;
+
     hasStarted.current = true;
+
+    setLoading(true);
+
+    setTimeout(() => {
+
+      setLoading(false);
+
+      addBot(
+        "Hallo! Ik ben uw Bring ChatBot 👋\n\nKies een optie om te beginnen."
+      );
+
+    }, 2000);
+
   }, []);
 
   function addBot(t) {
+
     setMessages((prev) => [
+
       ...prev,
-      { sender: "bot", text: t },
+
+      {
+        sender: "bot",
+        text: t
+      },
+
     ]);
   }
 
   function addUser(t) {
+
     setMessages((prev) => [
+
       ...prev,
-      { sender: "user", text: t },
+
+      {
+        sender: "user",
+        text: t
+      },
+
     ]);
   }
 
   async function sendToBackend(question) {
-    const controller = new AbortController();
+
+    const controller =
+      new AbortController();
 
     const timeout = setTimeout(
+
       () => controller.abort(),
+
       REQUEST_TIMEOUT_MS
     );
 
     try {
-      const res = await fetch(CHAT_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: question,
-        }),
-        signal: controller.signal,
-      });
 
-      const data = await res.json().catch(() => ({}));
+      const res = await fetch(
+        CHAT_URL,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            message: question,
+          }),
+
+          signal: controller.signal,
+        }
+      );
+
+      const data =
+        await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error("Backend fout");
+
+        throw new Error(
+          "Backend fout"
+        );
       }
 
-      return cleanBotAnswer(data?.answer);
+      return cleanBotAnswer(
+        data?.answer
+      );
+
     } catch (err) {
-      if (err?.name === "AbortError") {
-        return "Backend duurde te lang (timeout).";
+
+      if (
+        err?.name === "AbortError"
+      ) {
+
+        return
+          "Backend duurde te lang (timeout).";
       }
 
       return "Er ging iets mis.";
+
     } finally {
+
       clearTimeout(timeout);
     }
   }
 
   async function handleUserSend(input) {
+
     if (loading) return;
 
-    const msg = (input || "").trim();
+    const msg =
+      (input || "").trim();
 
     if (!msg) return;
+
+    if (
+      input === "Algemene vraag" ||
+      input === "Track & Trace" ||
+      input === "Interne Vraag"
+    ) {
+
+      setHasSelectedOption(true);
+    }
 
     setLoading(true);
 
@@ -96,47 +170,58 @@ function App() {
     setText("");
 
     try {
-      const answer = await sendToBackend(msg);
+
+      const answer =
+        await sendToBackend(msg);
+
       addBot(answer);
+
     } finally {
+
       setLoading(false);
     }
   }
 
   function sendMessage(e) {
+
     e.preventDefault();
+
     handleUserSend(text);
   }
 
   return (
+
     <div className="container">
+
       <div className="chatbot-popup">
 
-        {/* Header */}
+        {/* HEADER */}
+
         <div className="chat-header">
-          <div className="header-info">
-            <ChatbotIcon />
-            <h2 className="logo-text">ChatBot</h2>
-          </div>
+
+          <h2>
+            Bring ChatBot
+          </h2>
+
         </div>
 
-        {/* Chat body */}
-        <div className="chat-body" ref={chatBodyRef}>
+        {/* CHAT BODY */}
 
-          {/* Welkomstbericht */}
-          <div className="message-bot-message">
-            <ChatbotIcon />
+        <div
+          className="chat-body"
+          ref={chatBodyRef}
+        >
 
-        
-          </div>
+          {/* QUICK OPTIONS */}
 
-          {/* Optie bubbles */}
           <div className="vraag-container">
 
             <div
               className="message-option-bubble"
               onClick={() =>
-                handleUserSend("Algemene vraag")
+                handleUserSend(
+                  "Algemene vraag"
+                )
               }
             >
               Algemene vraag
@@ -145,7 +230,9 @@ function App() {
             <div
               className="message-option-bubble"
               onClick={() =>
-                handleUserSend("Track & Trace")
+                handleUserSend(
+                  "Track & Trace"
+                )
               }
             >
               Track & Trace
@@ -154,7 +241,9 @@ function App() {
             <div
               className="message-option-bubble"
               onClick={() =>
-                handleUserSend("Interne_Vraag")
+                handleUserSend(
+                  "Interne Vraag"
+                )
               }
             >
               Interne Vraag
@@ -162,75 +251,115 @@ function App() {
 
           </div>
 
-          {/* Chat berichten */}
+          {/* CHAT MESSAGES */}
+
           {messages.map((msg, index) => (
+
             <div
               key={index}
+
               className={
                 msg.sender === "user"
+
                   ? "message-user-message"
+
                   : "message-bot-message"
               }
             >
+
               {msg.sender === "bot" && (
                 <ChatbotIcon />
               )}
 
               <p
                 className="message-text"
+
                 style={{
                   whiteSpace: "pre-wrap",
                 }}
               >
                 {msg.text}
               </p>
+
             </div>
           ))}
 
-          {/* Loading dots */}
+          {/* LOADING DOTS */}
+
           {loading && (
+
             <div className="message-bot-message">
+
               <ChatbotIcon />
 
               <p className="message-text typing">
+
                 <span></span>
                 <span></span>
                 <span></span>
+
               </p>
+
             </div>
           )}
 
         </div>
 
-        {/* Footer */}
+        {/* FOOTER */}
+
         <div className="chat-footer">
+
           <form
             onSubmit={sendMessage}
             className="chat-form"
           >
+
             <input
               type="text"
-              placeholder="Typ je bericht..."
+
+              placeholder={
+                hasSelectedOption
+
+                  ? "Typ je bericht..."
+
+                  : "Kies eerst een optie..."
+              }
+
               className="message-input"
+
               value={text}
+
               onChange={(e) =>
                 setText(e.target.value)
               }
-              disabled={loading}
+
+              disabled={
+                loading ||
+                !hasSelectedOption
+              }
             />
 
             <button
               className="material-symbols-rounded"
-              disabled={loading}
+
+              disabled={
+                loading ||
+                !hasSelectedOption
+              }
+
               type="submit"
+
               title="Verstuur"
             >
               keyboard_arrow_up
             </button>
+
           </form>
+
         </div>
 
       </div>
+
     </div>
   );
 }
