@@ -202,7 +202,7 @@ def should_use_tracking(msg, session_id, llm):
 
 
 # =====================================================
-# DATABASE FETCH
+# FETCH TRACKING DATA
 # =====================================================
 
 def fetch_tracking_data(
@@ -303,7 +303,7 @@ def fetch_tracking_data(
 
 
 # =====================================================
-# MAIN TRACKING HANDLER
+# HANDLE TRACKING
 # =====================================================
 
 def handle_tracking(msg, engine_track, llm, session_id):
@@ -317,9 +317,10 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
     language = user_state["language"]
 
-    # =================================================
+
+    # =====================================================
     # CONTINUE FLOW
-    # =================================================
+    # =====================================================
 
     if user_state["waiting_for_continue"]:
 
@@ -332,35 +333,78 @@ def handle_tracking(msg, engine_track, llm, session_id):
             user_state = get_user_state(session_id)
 
             user_state["language"] = language
-
             user_state["tracking_active"] = True
             user_state["waiting_for_tracking_number"] = True
 
-            return ai_reply(
-                llm,
-                language,
-                "Ask the user to provide the tracking number."
-            )
+            return "Please provide the tracking number."
 
         if intent == "no":
 
             reset_state(session_id)
 
-            return ai_reply(
-                llm,
-                language,
-                "Ask the user how else you can help."
+            return "How else can I help you?"
+
+        return "Please answer with yes or no."
+
+
+    # =====================================================
+    # ZIPCODE QUESTION FLOW
+    # =====================================================
+
+    if user_state["waiting_for_zipcode_question"]:
+
+        intent = classify_tracking_intent(msg, llm)
+
+        if intent not in {"yes", "no"}:
+            return "Please answer with yes or no."
+
+        tracking_number = user_state["tracking_number"]
+
+        user_state["waiting_for_zipcode_question"] = False
+
+
+        # USER HAS ZIPCODE
+        if intent == "yes":
+
+            user_state["waiting_for_zipcode"] = True
+
+            return "Please provide the zipcode."
+
+
+        # USER HAS NO ZIPCODE
+        try:
+
+            row = fetch_tracking_data(
+                engine_track,
+                tracking_number,
+                include_full=False
             )
 
-        return ai_reply(
-            llm,
-            language,
-            "Ask the user to answer yes or no."
+            if not row:
+
+                reset_state(session_id)
+
+                return "No shipment was found."
+
+        except Exception as e:
+
+            reset_state(session_id)
+
+            return str(e)
+
+        user_state["waiting_for_continue"] = True
+
+        response = (
+            f"EDI reference: {row[0]}\n"
+            f"Expected delivery day: {row[1]}"
         )
 
-    # =================================================
-    # ZIPCODE FLOW
-    # =================================================
+        return response
+
+
+    # =====================================================
+    # ZIPCODE VALIDATION FLOW
+    # =====================================================
 
     if user_state["waiting_for_zipcode"]:
 
@@ -378,11 +422,7 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
                 reset_state(session_id)
 
-                return ai_reply(
-                    llm,
-                    language,
-                    "Tell the user no shipment was found."
-                )
+                return "No shipment was found."
 
             data = dict(row._mapping)
 
@@ -408,11 +448,7 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
         if zipcode_input not in {l_zip, u_zip}:
 
-            return ai_reply(
-                llm,
-                language,
-                "Tell the user the zipcode does not match the shipment."
-            )
+            return "The provided zipcode does not match the shipment."
 
         user_state["waiting_for_zipcode"] = False
         user_state["waiting_for_continue"] = True
@@ -442,86 +478,12 @@ def handle_tracking(msg, engine_track, llm, session_id):
             f"{data.get('U_COUNTRY_FULL')}"
         )
 
-        followup = ai_reply(
-            llm,
-            language,
-            "Ask the user if they need anything else."
-        )
+        return response
 
-        return f"{response}\n\n{followup}"
 
-    # =================================================
-    # ZIPCODE QUESTION
-    # =================================================
-
-    if user_state["waiting_for_zipcode_question"]:
-
-        intent = classify_tracking_intent(msg, llm)
-
-        if intent not in {"yes", "no"}:
-
-            return ai_reply(
-                llm,
-                language,
-                "Ask the user to answer yes or no."
-            )
-
-        tracking_number = user_state["tracking_number"]
-
-        user_state["waiting_for_zipcode_question"] = False
-
-        if intent == "yes":
-
-            user_state["waiting_for_zipcode"] = True
-
-            return ai_reply(
-                llm,
-                language,
-                "Ask the user to provide the zipcode."
-            )
-
-        try:
-
-            row = fetch_tracking_data(
-                engine_track,
-                tracking_number,
-                include_full=False
-            )
-
-            if not row:
-
-                reset_state(session_id)
-
-                return ai_reply(
-                    llm,
-                    language,
-                    "Tell the user no shipment was found."
-                )
-
-        except Exception as e:
-
-            reset_state(session_id)
-
-            return str(e)
-
-        user_state["waiting_for_continue"] = True
-
-        response = (
-            f"EDI reference: {row[0]}\n"
-            f"Expected delivery day: {row[1]}"
-        )
-
-        followup = ai_reply(
-            llm,
-            language,
-            "Ask the user if they need anything else."
-        )
-
-        return f"{response}\n\n{followup}"
-
-    # =================================================
-    # TRACKING NUMBER INPUT
-    # =================================================
+    # =====================================================
+    # TRACKING NUMBER FLOW
+    # =====================================================
 
     if (
         user_state["tracking_active"]
@@ -539,11 +501,7 @@ def handle_tracking(msg, engine_track, llm, session_id):
             or not (6 <= len(clean_msg) <= 30)
         ):
 
-            return ai_reply(
-                llm,
-                language,
-                "Tell the user to provide a valid tracking number."
-            )
+            return "Please provide a valid tracking number."
 
         try:
 
@@ -555,11 +513,7 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
             if not row:
 
-                return ai_reply(
-                    llm,
-                    language,
-                    "Tell the user the tracking number was not found."
-                )
+                return "Tracking number not found."
 
         except Exception as e:
 
@@ -568,15 +522,14 @@ def handle_tracking(msg, engine_track, llm, session_id):
         user_state["tracking_number"] = clean_msg
 
         user_state["waiting_for_tracking_number"] = False
-
         user_state["waiting_for_zipcode_question"] = True
 
-        return ai_reply(
-            llm,
-            language,
-            "Ask the user if they have the zipcode."
-        )
+        return "Do you have the recipient's zipcode? Yes or no."
 
+
+    # =====================================================
+    # START TRACKING FLOW
+    # =====================================================
 
     intent = classify_tracking_intent(msg, llm)
 
@@ -592,10 +545,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
         user_state["tracking_active"] = True
         user_state["waiting_for_tracking_number"] = True
 
-        return ai_reply(
-            llm,
-            detected_language,
-            "Ask the user to provide the tracking number."
-        )
+        return "Please provide the tracking number."
 
     return None

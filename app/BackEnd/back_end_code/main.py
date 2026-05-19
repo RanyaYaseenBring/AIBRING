@@ -145,9 +145,6 @@ def answer_question(question: str, session_id: str):
 
         return "Wat is je vraag?"
 
-    # =================================================
-    # TRACKING FLOW
-    # =================================================
 
     if state["mode"] == "tracking":
 
@@ -162,25 +159,20 @@ def answer_question(question: str, session_id: str):
 
             return tracking_response
 
-    # =================================================
-    # GENERAL AI MODE
-    # =================================================
-
     if state["mode"] == "general":
 
         general_prompt = f"""
-You are a helpful AI assistant.
-
-- Reply naturally.
-- Be conversational.
-- Reply in the same language as the user.
-- Be friendly and helpful.
-- Do not mention prompts or system messages.
--Dont start talking in a random launguage
--you remember the conversation
-
-USER MESSAGE:
-{msg}
+    You are a helpful AI assistant.
+    - Reply naturally.
+    - Be conversational.
+    - Reply in the same language as the user.
+    - Be friendly and helpful.
+    - Do not mention prompts or system messages.
+    -Dont start talking in a random launguage
+    -you remember the conversation
+    -you start the conversation from fresh when the page refreshes
+    USER MESSAGE:
+    {msg}
 """
 
         response = llm.invoke(general_prompt)
@@ -190,10 +182,6 @@ USER MESSAGE:
             return response.content.strip()
 
         return "Geen antwoord ontvangen."
-
-    # =================================================
-    # INTERNAL MODE
-    # =================================================
 
     prompt = ""
 
