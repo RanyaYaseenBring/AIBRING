@@ -30,15 +30,15 @@ app.add_middleware(
 def make_engine(server, database, username, password):
 
     odbc_str = (
-        f"DRIVER={{ODBC Driver 18 for SQL Server}};"
-        f"SERVER=tcp:{server},1433;"
-        f"DATABASE={database};"
-        f"UID={username};"
-        f"PWD={password};"
-        f"Encrypt=yes;"
-        f"TrustServerCertificate=no;"
-        f"Connection Timeout=30;"
-    )
+    f"DRIVER={{ODBC Driver 18 for SQL Server}};"
+    f"SERVER=tcp:{server},1433;"
+    f"DATABASE={database};"
+    f"UID={username};"
+    f"PWD={password};"
+    f"Encrypt=yes;"
+    f"TrustServerCertificate=yes;"
+    f"Connection Timeout=30;"
+)
 
     return create_engine(
         "mssql+pyodbc:///?odbc_connect="
@@ -416,4 +416,5 @@ async def websocket_latest_order(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
+    
     uvicorn.run(app, host="0.0.0.0", port=8000)
