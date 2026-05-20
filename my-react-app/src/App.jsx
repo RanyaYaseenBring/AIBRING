@@ -1,27 +1,63 @@
 import { useState, useRef, useEffect } from "react";
-import ChatbotIcon from "./components/ChatbotIcon";
-
-const BACKEND_BASE = "http://127.0.0.1:8000";
-const CHAT_URL = `${BACKEND_BASE}/chat`;
-const REQUEST_TIMEOUT_MS = 180000;
-
-function cleanBotAnswer(answer) {
-  const text = (answer || "").trim();
-  return text || "Geen antwoord ontvangen.";
-}
+import "./index.css";
 
 function App() {
 
-  const [text, setText] = useState("");
-  const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(false);
+  /* =========================
+     LOGIN STATE
+  ========================= */
 
-  const [hasSelectedOption, setHasSelectedOption] =
+  const [loggedIn, setLoggedIn] =
     useState(false);
 
-  const chatBodyRef = useRef(null);
+  const [username, setUsername] =
+    useState("");
 
-  const hasStarted = useRef(false);
+  const [password, setPassword] =
+    useState("");
+
+  const [error, setError] =
+    useState("");
+
+  /* =========================
+     CHAT STATE
+  ========================= */
+
+  const [text, setText] =
+    useState("");
+
+  const [messages, setMessages] =
+    useState([]);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [hasSelectedOption,
+    setHasSelectedOption] =
+    useState(false);
+
+  const chatBodyRef =
+    useRef(null);
+
+  const hasStarted =
+    useRef(false);
+
+  /* =========================
+     BACKEND
+  ========================= */
+
+  const BACKEND_BASE =
+    "http://127.0.0.1:8000";
+
+  const CHAT_URL =
+    `${BACKEND_BASE}/chat`;
+
+  const REQUEST_TIMEOUT_MS =
+    180000;
+
+  /* =========================
+     AUTO SCROLL
+  ========================= */
 
   useEffect(() => {
 
@@ -33,7 +69,13 @@ function App() {
 
   }, [messages, loading]);
 
+  /* =========================
+     WELCOME MESSAGE
+  ========================= */
+
   useEffect(() => {
+
+    if (!loggedIn) return;
 
     if (hasStarted.current) return;
 
@@ -51,7 +93,20 @@ function App() {
 
     }, 2000);
 
-  }, []);
+  }, [loggedIn]);
+
+  /* =========================
+     HELPERS
+  ========================= */
+
+  function cleanBotAnswer(answer) {
+
+    const text =
+      (answer || "").trim();
+
+    return text ||
+      "Geen antwoord ontvangen.";
+  }
 
   function addBot(t) {
 
@@ -62,7 +117,7 @@ function App() {
       {
         sender: "bot",
         text: t
-      },
+      }
 
     ]);
   }
@@ -76,45 +131,53 @@ function App() {
       {
         sender: "user",
         text: t
-      },
+      }
 
     ]);
   }
+
+  /* =========================
+     BACKEND REQUEST
+  ========================= */
 
   async function sendToBackend(question) {
 
     const controller =
       new AbortController();
 
-    const timeout = setTimeout(
+    const timeout =
+      setTimeout(
 
-      () => controller.abort(),
+        () => controller.abort(),
 
-      REQUEST_TIMEOUT_MS
-    );
+        REQUEST_TIMEOUT_MS
+      );
 
     try {
 
-      const res = await fetch(
-        CHAT_URL,
-        {
-          method: "POST",
+      const res =
+        await fetch(
+          CHAT_URL,
+          {
+            method: "POST",
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-          body: JSON.stringify({
-            message: question,
-          }),
+            body: JSON.stringify({
+              message: question,
+            }),
 
-          signal: controller.signal,
-        }
-      );
+            signal:
+              controller.signal,
+          }
+        );
 
       const data =
-        await res.json().catch(() => ({}));
+        await res.json()
+          .catch(() => ({}));
 
       if (!res.ok) {
 
@@ -134,16 +197,21 @@ function App() {
       ) {
 
         return
-          "Backend duurde te lang (timeout).";
+          "Backend duurde te lang.";
       }
 
-      return "Er ging iets mis.";
+      return
+        "Er ging iets mis.";
 
     } finally {
 
       clearTimeout(timeout);
     }
   }
+
+  /* =========================
+     SEND MESSAGE
+  ========================= */
 
   async function handleUserSend(input) {
 
@@ -189,6 +257,96 @@ function App() {
     handleUserSend(text);
   }
 
+  /* =========================
+     LOGIN SCREEN
+  ========================= */
+
+  if (!loggedIn) {
+
+    return (
+
+      <div className="login-page">
+
+        <div className="login-box">
+
+          <h1>
+            Bring ChatBot
+          </h1>
+
+          <input
+            type="text"
+
+            placeholder="Gebruikersnaam"
+
+            value={username}
+
+            onChange={(e) =>
+              setUsername(
+                e.target.value
+              )
+            }
+          />
+
+          <input
+            type="password"
+
+            placeholder="Wachtwoord"
+
+            value={password}
+
+            onChange={(e) =>
+              setPassword(
+                e.target.value
+              )
+            }
+          />
+
+          {error && (
+
+            <p className="login-error">
+              {error}
+            </p>
+
+          )}
+
+          <button
+
+            onClick={() => {
+
+              if (
+
+                username === "admin" &&
+                password === "Bring123!"
+
+              ) {
+
+                setError("");
+
+                setLoggedIn(true);
+
+              } else {
+
+                setError(
+                  "Onjuiste login gegevens"
+                );
+              }
+
+            }}
+
+          >
+            Sign In
+          </button>
+
+        </div>
+
+      </div>
+    );
+  }
+
+  /* =========================
+     CHAT SCREEN
+  ========================= */
+
   return (
 
     <div className="container">
@@ -212,12 +370,13 @@ function App() {
           ref={chatBodyRef}
         >
 
-          {/* QUICK OPTIONS */}
+          {/* OPTIONS */}
 
           <div className="vraag-container">
 
             <div
               className="message-option-bubble"
+
               onClick={() =>
                 handleUserSend(
                   "Algemene vraag"
@@ -229,6 +388,7 @@ function App() {
 
             <div
               className="message-option-bubble"
+
               onClick={() =>
                 handleUserSend(
                   "Track & Trace"
@@ -240,6 +400,7 @@ function App() {
 
             <div
               className="message-option-bubble"
+
               onClick={() =>
                 handleUserSend(
                   "Interne Vraag"
@@ -268,14 +429,17 @@ function App() {
             >
 
               {msg.sender === "bot" && (
-                <ChatbotIcon />
+                <div className="bot-icon">
+                  🤖
+                </div>
               )}
 
               <p
                 className="message-text"
 
                 style={{
-                  whiteSpace: "pre-wrap",
+                  whiteSpace:
+                    "pre-wrap",
                 }}
               >
                 {msg.text}
@@ -284,13 +448,15 @@ function App() {
             </div>
           ))}
 
-          {/* LOADING DOTS */}
+          {/* LOADING */}
 
           {loading && (
 
             <div className="message-bot-message">
 
-              <ChatbotIcon />
+              <div className="bot-icon">
+                🤖
+              </div>
 
               <p className="message-text typing">
 
@@ -311,6 +477,7 @@ function App() {
 
           <form
             onSubmit={sendMessage}
+
             className="chat-form"
           >
 
@@ -330,7 +497,9 @@ function App() {
               value={text}
 
               onChange={(e) =>
-                setText(e.target.value)
+                setText(
+                  e.target.value
+                )
               }
 
               disabled={
@@ -340,18 +509,14 @@ function App() {
             />
 
             <button
-              className="material-symbols-rounded"
-
               disabled={
                 loading ||
                 !hasSelectedOption
               }
 
               type="submit"
-
-              title="Verstuur"
             >
-              keyboard_arrow_up
+              ↑
             </button>
 
           </form>

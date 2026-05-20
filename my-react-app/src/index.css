@@ -13,19 +13,139 @@ html, body{
     overflow: hidden;
 }
 
-/* ===== FULL SCREEN BACKGROUND ===== */
+/* =========================
+   BACKGROUND
+========================= */
 
 body{
     background:
     linear-gradient(
         135deg,
-        #5da824,
-        #183503,
+        #173302,
+        #234d03,
         #356d05
     );
 }
 
-/* ===== MAIN CHAT WINDOW ===== */
+/* =========================
+   LOGIN PAGE
+========================= */
+
+.login-page{
+
+    width: 100vw;
+    height: 100vh;
+
+    display: flex;
+
+    justify-content: center;
+    align-items: center;
+}
+
+/* =========================
+   LOGIN BOX
+========================= */
+
+.login-box{
+
+    width: 400px;
+
+    padding: 40px;
+
+    border-radius: 24px;
+
+    background:
+    rgba(255,255,255,0.08);
+
+    border:
+    1px solid rgba(255,255,255,0.15);
+
+    backdrop-filter: blur(14px);
+
+    display: flex;
+    flex-direction: column;
+
+    gap: 18px;
+}
+
+.login-box h1{
+
+    color: white;
+
+    text-align: center;
+
+    margin-bottom: 10px;
+
+    font-size: 32px;
+}
+
+/* =========================
+   LOGIN INPUTS
+========================= */
+
+.login-box input{
+
+    width: 100%;
+
+    padding: 14px 16px;
+
+    border-radius: 14px;
+
+    border:
+    1px solid rgba(255,255,255,0.18);
+
+    background:
+    rgba(255,255,255,0.08);
+
+    color: white;
+
+    outline: none;
+
+    font-size: 15px;
+}
+
+.login-box input::placeholder{
+
+    color:
+    rgba(255,255,255,0.6);
+}
+
+/* =========================
+   LOGIN BUTTON
+========================= */
+
+.login-box button{
+
+    width: 100%;
+
+    padding: 14px;
+
+    border: none;
+
+    border-radius: 14px;
+
+    background:
+    #4f9b1f;
+
+    color: white;
+
+    font-size: 16px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition: 0.2s ease;
+}
+
+.login-box button:hover{
+
+    background:
+    #63bd2b;
+}
+
+/* =========================
+   MAIN CHAT WINDOW
+========================= */
 
 .chatbot-popup{
 
@@ -38,18 +158,21 @@ body{
     flex-direction: column;
 
     background:
-    rgba(255,255,255,0.08);
+    rgba(255,255,255,0.06);
 
     backdrop-filter: blur(14px);
 }
 
-/* ===== HEADER ===== */
+/* =========================
+   HEADER
+========================= */
 
 .chat-header{
 
     padding: 22px;
 
     display: flex;
+
     justify-content: center;
     align-items: center;
 
@@ -64,19 +187,21 @@ body{
 
     color: white;
 
-    font-size: 24px;
+    font-size: 26px;
     font-weight: 700;
-
-    letter-spacing: 0.5px;
 }
 
-/* ===== WHITE SVG LOGO ===== */
+/* =========================
+   WHITE SVG LOGO
+========================= */
 
 svg{
     fill: white;
 }
 
-/* ===== CHAT BODY ===== */
+/* =========================
+   CHAT BODY
+========================= */
 
 .chat-body{
 
@@ -92,12 +217,17 @@ svg{
     gap: 16px;
 }
 
-/* ===== BOT MESSAGE ===== */
+/* =========================
+   BOT MESSAGE
+========================= */
 
 .message-bot-message{
 
     display: flex;
-    justify-content: flex-start;
+
+    align-items: flex-start;
+
+    gap: 10px;
 }
 
 .message-bot-message .message-text{
@@ -106,7 +236,8 @@ svg{
 
     padding: 14px 18px;
 
-    border-radius: 18px 18px 18px 4px;
+    border-radius:
+    18px 18px 18px 4px;
 
     background:
     rgba(255,255,255,0.08);
@@ -121,11 +252,14 @@ svg{
     white-space: pre-wrap;
 }
 
-/* ===== USER MESSAGE ===== */
+/* =========================
+   USER MESSAGE
+========================= */
 
 .message-user-message{
 
     display: flex;
+
     justify-content: flex-end;
 }
 
@@ -135,7 +269,8 @@ svg{
 
     padding: 14px 18px;
 
-    border-radius: 18px 18px 4px 18px;
+    border-radius:
+    18px 18px 4px 18px;
 
     background:
     #4f9b1f;
@@ -150,11 +285,14 @@ svg{
     white-space: pre-wrap;
 }
 
-/* ===== QUICK OPTIONS ===== */
+/* =========================
+   QUICK OPTIONS
+========================= */
 
 .vraag-container{
 
     display: flex;
+
     flex-wrap: wrap;
 
     gap: 12px;
@@ -170,7 +308,7 @@ svg{
     rgba(255,255,255,0.08);
 
     border:
-    1px solid rgb(255, 255, 255);
+    1px solid rgba(255,255,255,0.18);
 
     color: white;
 
@@ -188,7 +326,9 @@ svg{
     #4f9b1f;
 }
 
-/* ===== FOOTER ===== */
+/* =========================
+   FOOTER
+========================= */
 
 .chat-footer{
 
@@ -201,11 +341,14 @@ svg{
     rgba(255,255,255,0.04);
 }
 
-/* ===== FORM ===== */
+/* =========================
+   FORM
+========================= */
 
 .chat-form{
 
     display: flex;
+
     align-items: center;
 
     gap: 10px;
@@ -221,7 +364,9 @@ svg{
     1px solid rgba(255,255,255,0.18);
 }
 
-/* ===== INPUT ===== */
+/* =========================
+   INPUT
+========================= */
 
 .message-input{
 
@@ -245,7 +390,9 @@ svg{
     rgba(255,255,255,0.6);
 }
 
-/* ===== SEND BUTTON ===== */
+/* =========================
+   SEND BUTTON
+========================= */
 
 .chat-footer button{
 
@@ -275,11 +422,14 @@ svg{
     #63bd2b;
 }
 
-/* ===== TYPING DOTS ===== */
+/* =========================
+   TYPING DOTS
+========================= */
 
 .message-text.typing{
 
     display: flex;
+
     align-items: center;
 
     gap: 6px;
@@ -319,7 +469,9 @@ svg{
     }
 }
 
-/* ===== SCROLLBAR ===== */
+/* =========================
+   SCROLLBAR
+========================= */
 
 .chat-body::-webkit-scrollbar{
     width: 7px;
@@ -328,7 +480,46 @@ svg{
 .chat-body::-webkit-scrollbar-thumb{
 
     background:
-    rgba(243, 239, 239, 0.938);
+    rgba(255,255,255,0.18);
 
     border-radius: 20px;
+}
+
+
+/* =========================
+   PASSWORD REQUIREMENTS
+========================= */
+
+.password-rules{
+
+    margin-top: 10px;
+
+    display: flex;
+    flex-direction: column;
+
+    gap: 8px;
+}
+
+.password-rule{
+
+    font-size: 14px;
+
+    color:
+    rgba(255,255,255,0.65);
+
+    transition: 0.2s ease;
+}
+
+/* ===== VALID ===== */
+
+.password-rule.valid{
+
+    color: #8fff73;
+}
+
+/* ===== INVALID ===== */
+
+.password-rule.invalid{
+
+    color: #ffb0b0;
 }
