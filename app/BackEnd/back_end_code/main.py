@@ -6,9 +6,9 @@ import asyncio
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel
 from sqlalchemy import create_engine, text
-
+from fastapi import FastAPI, WebSocket
+from pydantic import BaseModel
 from langchain_ollama import ChatOllama
 from ChatBotMemory import save_chat_memory
 from track_traceFunction import handle_tracking
@@ -114,7 +114,7 @@ def reset_state(session_id: str):
 def answer_question(question: str, session_id: str):
 
     msg = question.strip()
-    msg_lower = msg.lower()
+    msg_lower = msg.strip().lower()
 
     state = get_user_state(session_id)
 
@@ -183,104 +183,12 @@ def answer_question(question: str, session_id: str):
 
         return "Geen antwoord ontvangen."
 
-    prompt = ""
-
     if state["mode"] == "internal":
 
         prompt = f"""
-You are a parser.
-You are NOT a chatbot.
+    YOUR PROMPT HERE
+    """
 
-Return ONLY one of these formats:
-
-employee_lookup|name|field
-normal_chat
-missing_name
-
-Never explain anything.
-No extra text.
-No reasoning.
-No notes.
-No markdown.
-
-VALID FIELDS:
-
-Mobile
-Mail
-FunctionDesc
-DateOfBirth
-EmploymentStart
-Street
-ZIPCode
-HouseNumber
-City
-
-FIELD MAPPING:
-
-telefoon -> Mobile
-telefoonnummer -> Mobile
-mobiel -> Mobile
-mobile -> Mobile
-phone -> Mobile
-telefoon nummer -> Mobile
-
-email -> Mail
-mail -> Mail
-
-functie -> FunctionDesc
-job -> FunctionDesc
-
-verjaardag -> DateOfBirth
-birthday -> DateOfBirth
-
-startdatum -> EmploymentStart
-
-straatnaam -> Street
-straat -> Street
-street -> Street
-
-postcode -> ZIPCode
-zipcode -> ZIPCode
-
-huisnummer -> HouseNumber
-
-stad -> City
-city -> City
-
-If the user asks employee information
-but no employee name is present:
-
-return:
-missing_name
-
-Examples:
-
-wat is het telefoonnummer van ranya
-employee_lookup|ranya|Mobile
-
-wat is de email van mike
-employee_lookup|mike|Mail
-
-wat is de straatnaam van ranya
-employee_lookup|ranya|Street
-
-wat is de stad van ranya
-employee_lookup|ranya|City
-
-wat is het huisnummer
-missing_name
-
-IMPORTANT:
-
-If the requested field is BirthOfDate:
-
-- Use DateOfBirth to calculate the BirthOfDate.
-- Age means:
-current year - birth year
-
-USER MESSAGE:
-{msg}
-"""
     response = llm.invoke(prompt)
 
     if not response or not response.content:
@@ -324,9 +232,6 @@ USER MESSAGE:
                 OR LOWER(BirthName) = LOWER(:name)
             """
 
-            print("SQL QUERY:")
-            print(query)
-
             with engine_emp.connect() as conn:
 
                 row = conn.execute(
@@ -342,7 +247,6 @@ USER MESSAGE:
 
         except Exception as e:
 
-            print("EMPLOYEE LOOKUP ERROR:")
             print(e)
 
             return "Database fout."
@@ -386,33 +290,51 @@ async def reset_chat(session_id: str):
         "session_id": session_id
     }
 
-@app.websocket("/ws/latest-order")
-async def websocket_latest_order(websocket: WebSocket):
-    await websocket.accept()
 
-    global last_order_cache
 
-    while True:
+# =========================
+# LOGIN MODEL
+# =========================
 
-        try:
+class LoginReq(BaseModel):
 
-            data = get_latest_order(engine_track)
+    email: str
+    password: str
 
-            if data != last_order_cache:
 
-                last_order_cache = data
+# =========================
+# LOGIN ROUTE
+# =========================
 
-                await websocket.send_text(
-                    json.dumps(data)
-                )
+@app.post("/login")
 
-            await asyncio.sleep(5)
+def login(req: LoginReq):
 
-        except Exception as e:
+    # ====================================
+    # FAKE ADMIN ACCOUNT
+    # ====================================
 
-            print("WS ERROR:", e)
+    if (
 
-            break
+        req.email == "admin@bring.com"
+
+        and
+
+        req.password == "Admin123!"
+
+    ):
+
+        return {
+            "success": True
+        }
+
+    # ====================================
+    # FAILED LOGIN
+    # ====================================
+
+    return {
+        "success": False
+    }
 
 if __name__ == "__main__":
     import uvicorn

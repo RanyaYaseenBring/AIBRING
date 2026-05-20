@@ -1,0 +1,44 @@
+{
+  "default": [
+    {
+      "user": "Interne Vraag",
+      "bot": "Wat is je vraag?"
+    },
+    {
+      "user": "wat is de telefoon nummer van ranya",
+      "bot": "+31629493721"
+    },
+    {
+      "user": "Track & Trace",
+      "bot": "Please provide the tracking number."
+    },
+    {
+      "user": "35244793 \\",
+      "bot": "Please provide a valid tracking number."
+    },
+    {
+      "user": "35244793",
+      "bot": "Do you have the recipient's zipcode? Yes or no."
+    },
+    {
+      "user": "no",
+      "bot": "EDI reference: Tt001747908-000000035244793\nExpected delivery day: 2026-04-01 14:09:00"
+    },
+    {
+      "user": "Algemene vraag",
+      "bot": "Hallo! Hoe kan ik u vandaag helpen?"
+    },
+    {
+      "user": "hoe gaat het?",
+      "bot": "Hoe gaat het met jou? Het is een mooi dag vandaag, hè? Hebben jij en je gezin al plannen voor de zomer?"
+    },
+    {
+      "user": "nee jij?",
+      "bot": "Hoi! Ik ben goed, dank je. En jij? Hoe gaat het met je vandaag?"
+    },
+    {
+      "user": "Track & Trace",
+      "bot": "Please answer with yes or no."
+    }
+  ]
+}

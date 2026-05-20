@@ -1,22 +1,66 @@
 import json
 import os
 
-def save_chat_memory(user_message, bot_response, file_path="chat_memory.json"):
-    
-    if not os.path.exists(file_path):
-        data = {"default": []}
-    else:
-        with open(file_path, "r", encoding="utf-8") as f:
-            try:
-                data = json.load(f)
-            except:
-                data = {"default": []}
+MEMORY_FILE = "chat_memory.json"
 
-    data["default"].append({
+
+def save_chat_memory(
+    username,
+    user_message,
+    bot_answer
+):
+
+    # =========================
+    # LOAD JSON
+    # =========================
+
+    if os.path.exists(MEMORY_FILE):
+
+        with open(
+            MEMORY_FILE,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
+            data = json.load(f)
+
+    else:
+
+        data = {}
+
+    # =========================
+    # CREATE USER SECTION
+    # =========================
+
+    if username not in data:
+
+        data[username] = []
+
+    # =========================
+    # ADD CHAT MEMORY
+    # =========================
+
+    data[username].append({
+
         "user": user_message,
-        "bot": bot_response
+
+        "bot": bot_answer
+
     })
 
-    # Opslaan
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    # =========================
+    # SAVE JSON
+    # =========================
+
+    with open(
+        MEMORY_FILE,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            data,
+            f,
+            indent=2,
+            ensure_ascii=False
+        )

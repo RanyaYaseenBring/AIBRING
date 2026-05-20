@@ -252,6 +252,48 @@ svg{
     white-space: pre-wrap;
 }
 
+.message-text.typing {
+
+    min-width: 60px;
+
+    min-height: 24px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 6px;
+
+    padding: 14px 18px;
+
+    border-radius:
+    18px 18px 18px 4px;
+
+    background:
+    rgba(255,255,255,0.08);
+
+    border:
+    1px solid rgba(255,255,255,0.2);
+}
+
+.message-text.typing span {
+
+    width: 8px;
+    height: 8px;
+
+    border-radius: 50%;
+
+    background: white;
+
+    animation:
+    typingDots 1.2s infinite ease-in-out;
+}
+
+
+
+
 /* =========================
    USER MESSAGE
 ========================= */
@@ -522,4 +564,33 @@ svg{
 .password-rule.invalid{
 
     color: #ffb0b0;
+}
+
+.message-bot-message {
+
+    display: flex;
+
+    align-items: flex-start;
+
+    gap: 10px;
+
+    max-width: 70%;
+}
+
+.bot-icon {
+
+    font-size: 22px;
+
+    margin-top: 5px;
+}
+
+.message-bot-message {
+
+    display: flex;
+
+    align-items: flex-start;
+
+    gap: 10px;
+
+    max-width: 70%;
 }
