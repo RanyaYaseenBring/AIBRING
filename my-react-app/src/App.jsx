@@ -1,16 +1,24 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
+
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  useNavigate
+} from "react-router-dom";
+
 import "./index.css";
 
-function App() {
+/* =========================
+   LOGIN PAGE
+========================= */
 
-  /* =========================
-     LOGIN STATE
-  ========================= */
+function LoginPage() {
 
-  const [loggedIn, setLoggedIn] =
-    useState(false);
+  const navigate =
+    useNavigate();
 
-  const [username, setUsername] =
+  const [email, setEmail] =
     useState("");
 
   const [password, setPassword] =
@@ -19,513 +27,336 @@ function App() {
   const [error, setError] =
     useState("");
 
-  /* =========================
-     CHAT STATE
-  ========================= */
-
-  const [text, setText] =
-    useState("");
-
-  const [messages, setMessages] =
-    useState([]);
-
-  const [loading, setLoading] =
-    useState(false);
-
-  const [hasSelectedOption,
-    setHasSelectedOption] =
-    useState(false);
-
-  const chatBodyRef =
-    useRef(null);
-
-  const hasStarted =
-    useRef(false);
-
-  /* =========================
-     BACKEND
-  ========================= */
-
-  const BACKEND_BASE =
-    "http://127.0.0.1:8000";
-
-  const CHAT_URL =
-    `${BACKEND_BASE}/chat`;
-
-  const REQUEST_TIMEOUT_MS =
-    180000;
-
-  /* =========================
-     AUTO SCROLL
-  ========================= */
-
-  useEffect(() => {
-
-    if (chatBodyRef.current) {
-
-      chatBodyRef.current.scrollTop =
-        chatBodyRef.current.scrollHeight;
-    }
-
-  }, [messages, loading]);
-
-  /* =========================
-     WELCOME MESSAGE
-  ========================= */
-
-  useEffect(() => {
-
-    if (!loggedIn) return;
-
-    if (hasStarted.current) return;
-
-    hasStarted.current = true;
-
-    setLoading(true);
-
-    setTimeout(() => {
-
-      setLoading(false);
-
-      addBot(
-        "Hallo! Ik ben uw Bring ChatBot 👋\n\nKies een optie om te beginnen."
-      );
-
-    }, 2000);
-
-  }, [loggedIn]);
-
-  /* =========================
-     HELPERS
-  ========================= */
-
-  function cleanBotAnswer(answer) {
-
-    const text =
-      (answer || "").trim();
-
-    return text ||
-      "Geen antwoord ontvangen.";
-  }
-
-  function addBot(t) {
-
-    setMessages((prev) => [
-
-      ...prev,
-
-      {
-        sender: "bot",
-        text: t
-      }
-
-    ]);
-  }
-
-  function addUser(t) {
-
-    setMessages((prev) => [
-
-      ...prev,
-
-      {
-        sender: "user",
-        text: t
-      }
-
-    ]);
-  }
-
-  /* =========================
-     BACKEND REQUEST
-  ========================= */
-
-  async function sendToBackend(question) {
-
-    const controller =
-      new AbortController();
-
-    const timeout =
-      setTimeout(
-
-        () => controller.abort(),
-
-        REQUEST_TIMEOUT_MS
-      );
+  async function handleLogin() {
 
     try {
 
-      const res =
-        await fetch(
-          CHAT_URL,
-          {
-            method: "POST",
+      const res = await fetch(
 
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
+        "http://127.0.0.1:8000/login",
 
-            body: JSON.stringify({
-              message: question,
-            }),
+        {
 
-            signal:
-              controller.signal,
-          }
-        );
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body: JSON.stringify({
+
+            email,
+            password
+
+          })
+
+        }
+
+      );
 
       const data =
-        await res.json()
-          .catch(() => ({}));
+        await res.json();
 
-      if (!res.ok) {
+      if (data.success) {
 
-        throw new Error(
-          "Backend fout"
+        navigate("/chat");
+
+      } else {
+
+        setError(
+          "Onjuiste login gegevens"
         );
       }
 
-      return cleanBotAnswer(
-        data?.answer
+    } catch {
+
+      setError(
+        "Kan geen verbinding maken met backend"
       );
-
-    } catch (err) {
-
-      if (
-        err?.name === "AbortError"
-      ) {
-
-        return
-          "Backend duurde te lang.";
-      }
-
-      return
-        "Er ging iets mis.";
-
-    } finally {
-
-      clearTimeout(timeout);
     }
   }
-
-  /* =========================
-     SEND MESSAGE
-  ========================= */
-
-  async function handleUserSend(input) {
-
-    if (loading) return;
-
-    const msg =
-      (input || "").trim();
-
-    if (!msg) return;
-
-    if (
-      input === "Algemene vraag" ||
-      input === "Track & Trace" ||
-      input === "Interne Vraag"
-    ) {
-
-      setHasSelectedOption(true);
-    }
-
-    setLoading(true);
-
-    addUser(msg);
-
-    setText("");
-
-    try {
-
-      const answer =
-        await sendToBackend(msg);
-
-      addBot(answer);
-
-    } finally {
-
-      setLoading(false);
-    }
-  }
-
-  function sendMessage(e) {
-
-    e.preventDefault();
-
-    handleUserSend(text);
-  }
-
-  /* =========================
-     LOGIN SCREEN
-  ========================= */
-
-  if (!loggedIn) {
-
-    return (
-
-      <div className="login-page">
-
-        <div className="login-box">
-
-          <h1>
-            Bring ChatBot
-          </h1>
-
-          <input
-            type="text"
-
-            placeholder="Gebruikersnaam"
-
-            value={username}
-
-            onChange={(e) =>
-              setUsername(
-                e.target.value
-              )
-            }
-          />
-
-          <input
-            type="password"
-
-            placeholder="Wachtwoord"
-
-            value={password}
-
-            onChange={(e) =>
-              setPassword(
-                e.target.value
-              )
-            }
-          />
-
-          {error && (
-
-            <p className="login-error">
-              {error}
-            </p>
-
-          )}
-
-          <button
-
-            onClick={() => {
-
-              if (
-
-                username === "admin" &&
-                password === "Bring123!"
-
-              ) {
-
-                setError("");
-
-                setLoggedIn(true);
-
-              } else {
-
-                setError(
-                  "Onjuiste login gegevens"
-                );
-              }
-
-            }}
-
-          >
-            Sign In
-          </button>
-
-        </div>
-
-      </div>
-    );
-  }
-
-  /* =========================
-     CHAT SCREEN
-  ========================= */
 
   return (
 
-    <div className="container">
+    <div className="login-page">
 
-      <div className="chatbot-popup">
+      <div className="login-box">
 
-        {/* HEADER */}
+        <h1>
+          Bring ChatBot
+        </h1>
 
-        <div className="chat-header">
+        <input
+          type="email"
+          placeholder="Email"
 
-          <h2>
-            Bring ChatBot
-          </h2>
+          value={email}
 
-        </div>
+          onChange={(e) =>
+            setEmail(
+              e.target.value
+            )
+          }
+        />
 
-        {/* CHAT BODY */}
+        <input
+          type="password"
+          placeholder="Wachtwoord"
 
-        <div
-          className="chat-body"
-          ref={chatBodyRef}
+          value={password}
+
+          onChange={(e) =>
+            setPassword(
+              e.target.value
+            )
+          }
+        />
+
+        {error && (
+
+          <p className="login-error">
+            {error}
+          </p>
+
+        )}
+
+        <button
+          onClick={handleLogin}
         >
+          Sign In
+        </button>
 
-          {/* OPTIONS */}
+        {/* CREATE ACCOUNT */}
 
-          <div className="vraag-container">
+        <button
+          className="switch-button"
 
-            <div
-              className="message-option-bubble"
-
-              onClick={() =>
-                handleUserSend(
-                  "Algemene vraag"
-                )
-              }
-            >
-              Algemene vraag
-            </div>
-
-            <div
-              className="message-option-bubble"
-
-              onClick={() =>
-                handleUserSend(
-                  "Track & Trace"
-                )
-              }
-            >
-              Track & Trace
-            </div>
-
-            <div
-              className="message-option-bubble"
-
-              onClick={() =>
-                handleUserSend(
-                  "Interne Vraag"
-                )
-              }
-            >
-              Interne Vraag
-            </div>
-
-          </div>
-
-          {/* CHAT MESSAGES */}
-
-          {messages.map((msg, index) => (
-
-            <div
-              key={index}
-
-              className={
-                msg.sender === "user"
-
-                  ? "message-user-message"
-
-                  : "message-bot-message"
-              }
-            >
-
-              {msg.sender === "bot" && (
-                <div className="bot-icon">
-                  🤖
-                </div>
-              )}
-
-              <p
-                className="message-text"
-
-                style={{
-                  whiteSpace:
-                    "pre-wrap",
-                }}
-              >
-                {msg.text}
-              </p>
-
-            </div>
-          ))}
-
-          {/* LOADING */}
-
-          {loading && (
-
-            <div className="message-bot-message">
-
-              <div className="bot-icon">
-                🤖
-              </div>
-
-              <p className="message-text typing">
-
-                <span></span>
-                <span></span>
-                <span></span>
-
-              </p>
-
-            </div>
-          )}
-
-        </div>
-
-        {/* FOOTER */}
-
-        <div className="chat-footer">
-
-          <form
-            onSubmit={sendMessage}
-
-            className="chat-form"
-          >
-
-            <input
-              type="text"
-
-              placeholder={
-                hasSelectedOption
-
-                  ? "Typ je bericht..."
-
-                  : "Kies eerst een optie..."
-              }
-
-              className="message-input"
-
-              value={text}
-
-              onChange={(e) =>
-                setText(
-                  e.target.value
-                )
-              }
-
-              disabled={
-                loading ||
-                !hasSelectedOption
-              }
-            />
-
-            <button
-              disabled={
-                loading ||
-                !hasSelectedOption
-              }
-
-              type="submit"
-            >
-              ↑
-            </button>
-
-          </form>
-
-        </div>
+          onClick={() =>
+            navigate("/signup")
+          }
+        >
+          Create Account
+        </button>
 
       </div>
 
     </div>
+  );
+}
+
+/* =========================
+   SIGNUP PAGE
+========================= */
+
+function SignupPage() {
+
+  const navigate =
+    useNavigate();
+
+  const [username, setUsername] =
+    useState("");
+
+  const [email, setEmail] =
+    useState("");
+
+  const [password, setPassword] =
+    useState("");
+
+  const [error, setError] =
+    useState("");
+
+  async function handleSignup() {
+
+    try {
+
+      const res = await fetch(
+
+        "http://127.0.0.1:8000/signup",
+
+        {
+
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body: JSON.stringify({
+
+            username,
+            email,
+            password
+
+          })
+
+        }
+
+      );
+
+      const data =
+        await res.json();
+
+      if (data.success) {
+
+        navigate("/");
+
+      } else {
+
+        setError(
+          data.message ||
+          "Signup mislukt"
+        );
+      }
+
+    } catch {
+
+      setError(
+        "Kan geen verbinding maken met backend"
+      );
+    }
+  }
+
+  return (
+
+    <div className="login-page">
+
+      <div className="login-box">
+
+        <h1>
+          Create Account
+        </h1>
+
+        {/* USERNAME */}
+
+        <input
+          type="text"
+          placeholder="Username"
+
+          value={username}
+
+          onChange={(e) =>
+            setUsername(
+              e.target.value
+            )
+          }
+        />
+
+        {/* EMAIL */}
+
+        <input
+          type="email"
+          placeholder="Email"
+
+          value={email}
+
+          onChange={(e) =>
+            setEmail(
+              e.target.value
+            )
+          }
+        />
+
+        {/* PASSWORD */}
+
+        <input
+          type="password"
+          placeholder="Wachtwoord"
+
+          value={password}
+
+          onChange={(e) =>
+            setPassword(
+              e.target.value
+            )
+          }
+        />
+
+        {error && (
+
+          <p className="login-error">
+            {error}
+          </p>
+
+        )}
+
+        <button
+          onClick={handleSignup}
+        >
+          Sign Up
+        </button>
+
+        <button
+          className="switch-button"
+
+          onClick={() =>
+            navigate("/")
+          }
+        >
+          Already have an account? Login
+        </button>
+
+      </div>
+
+    </div>
+  );
+}
+
+/* =========================
+   CHAT PAGE
+========================= */
+
+function ChatPage() {
+
+  return (
+
+    <div className="chat-page">
+
+      <h1>
+        Bring ChatBot
+      </h1>
+
+    </div>
+  );
+}
+
+/* =========================
+   APP
+========================= */
+
+function App() {
+
+  return (
+
+    <BrowserRouter>
+
+      <Routes>
+
+        {/* LOGIN */}
+
+        <Route
+          path="/"
+          element={<LoginPage />}
+        />
+
+        {/* SIGNUP */}
+
+        <Route
+          path="/signup"
+          element={<SignupPage />}
+        />
+
+        {/* CHAT */}
+
+        <Route
+          path="/chat"
+          element={<ChatPage />}
+        />
+
+      </Routes>
+
+    </BrowserRouter>
   );
 }
 
