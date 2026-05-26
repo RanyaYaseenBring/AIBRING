@@ -163,11 +163,6 @@ def answer_question(question: str, session_id: str):
 
             return tracking_response
 
-
-    # =================================================
-    # 3. MODE: GENERAL (ALGEMENE ASSISTENT)
-    # =================================================
-
     if state["mode"] == "general":
 
         general_prompt = f"""
@@ -191,8 +186,6 @@ def answer_question(question: str, session_id: str):
             return response.content.strip()
 
         return "Geen antwoord ontvangen van de algemene assistent."
-
-
     # =================================================
     # 4. MODE: INTERNAL (MEDEWERKERS PARSER)
     # =================================================
@@ -404,8 +397,6 @@ async def reset_chat(session_id: str):
         "session_id": session_id
     }
 
-
-
 class LoginReq(BaseModel):
 
     email: str
@@ -417,8 +408,6 @@ def login(req: LoginReq):
 
     print(req.email)
     print(req.password)
-
-
 
     return {
             "success": True
