@@ -1,4 +1,4 @@
- TABLE_GROUPS = {
+TABLE_GROUPS = {
 
     "employees": [
         "afas.Bring_Employees",

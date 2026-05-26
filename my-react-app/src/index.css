@@ -292,8 +292,6 @@ svg{
 }
 
 
-
-
 /* =========================
    USER MESSAGE
 ========================= */
@@ -593,4 +591,58 @@ svg{
     gap: 10px;
 
     max-width: 70%;
+}
+
+.message-bot-message {
+
+    display: flex;
+
+    align-items: flex-start;
+
+    gap: 10px;
+
+    margin-bottom: 16px;
+
+    width: 100%;
+}
+
+.message-user-message {
+
+    display: flex;
+
+    justify-content: flex-end;
+
+    margin-bottom: 16px;
+
+    width: 100%;
+}
+
+.message-text {
+
+    max-width: 70%;
+
+    padding: 14px 18px;
+
+    border-radius: 18px;
+
+    background: rgba(255,255,255,0.08);
+
+    border: 1px solid rgba(255,255,255,0.2);
+
+    color: white;
+
+    line-height: 1.5;
+
+    white-space: pre-wrap;
+
+    font-size: 16px;
+
+    word-break: break-word;
+}
+
+.bot-icon {
+
+    font-size: 24px;
+
+    margin-top: 5px;
 }

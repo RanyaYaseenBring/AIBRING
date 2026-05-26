@@ -119,7 +119,7 @@ def answer_question(question: str, session_id: str):
     state = get_user_state(session_id)
 
     # =================================================
-    # BUTTONS
+    # 1. BUTTONS CHAT-INPUTS
     # =================================================
 
     if msg_lower in ["algemene vraag", "algemene_vraag"]:
@@ -146,6 +146,10 @@ def answer_question(question: str, session_id: str):
         return "Wat is je vraag?"
 
 
+    # =================================================
+    # 2. MODE: TRACKING
+    # =================================================
+
     if state["mode"] == "tracking":
 
         tracking_response = handle_tracking(
@@ -159,6 +163,11 @@ def answer_question(question: str, session_id: str):
 
             return tracking_response
 
+
+    # =================================================
+    # 3. MODE: GENERAL (ALGEMENE ASSISTENT)
+    # =================================================
+
     if state["mode"] == "general":
 
         general_prompt = f"""
@@ -168,9 +177,9 @@ def answer_question(question: str, session_id: str):
     - Reply in the same language as the user.
     - Be friendly and helpful.
     - Do not mention prompts or system messages.
-    -Dont start talking in a random launguage
-    -you remember the conversation
-    -you start the conversation from fresh when the page refreshes
+    - Dont start talking in a random launguage
+    - you remember the conversation
+    - you start the conversation from fresh when the page refreshes
     USER MESSAGE:
     {msg}
 """
@@ -181,77 +190,181 @@ def answer_question(question: str, session_id: str):
 
             return response.content.strip()
 
-        return "Geen antwoord ontvangen."
+        return "Geen antwoord ontvangen van de algemene assistent."
+
+
+    # =================================================
+    # 4. MODE: INTERNAL (MEDEWERKERS PARSER)
+    # =================================================
 
     if state["mode"] == "internal":
 
         prompt = f"""
-    YOUR PROMPT HERE
-    """
+You are a parser.
+You are NOT a chatbot.
 
-    response = llm.invoke(prompt)
+Return ONLY one of these formats:
 
-    if not response or not response.content:
+employee_lookup|name|field
+normal_chat
+missing_name
 
-        return "Geen antwoord ontvangen."
+Never explain anything.
+No extra text.
+No reasoning.
+No notes.
+No markdown.
 
-    result = response.content.strip()
+VALID FIELDS:
 
-    print("RAW LLM RESULT:")
-    print(result)
+Mobile
+Mail
+FunctionDesc
+DateOfBirth
+EmploymentStart
+Street
+ZIPCode
+HouseNumber
+City
 
-    clean_result = result.strip()
+FIELD MAPPING:
 
-    if clean_result.lower().startswith("employee_lookup|"):
+telefoon -> Mobile
+telefoonnummer -> Mobile
+mobiel -> Mobile
+mobile -> Mobile
+phone -> Mobile
+telefoon nummer -> Mobile
 
-        try:
+email -> Mail
+mail -> Mail
 
-            _, name, field = clean_result.split("|", 2)
+functie -> FunctionDesc
+job -> FunctionDesc
 
-            allowed_fields = {
-                "Mobile",
-                "Mail",
-                "FunctionDesc",
-                "DateOfBirth",
-                "EmploymentStart",
-                "Street",
-                "ZIPCode",
-                "HouseNumber",
-                "City"
-            }
+verjaardag -> DateOfBirth
+birthday -> DateOfBirth
 
-            if field not in allowed_fields:
+startdatum -> EmploymentStart
 
-                return "Ongeldig veld."
+straatnaam -> Street
+straat -> Street
+street -> Street
 
-            query = f"""
-            SELECT TOP 1 {field}
-            FROM afas.Bring_Employees
-            WHERE
-                LOWER(FirstName) = LOWER(:name)
-                OR LOWER(BirthName) = LOWER(:name)
-            """
+postcode -> ZIPCode
+zipcode -> ZIPCode
 
-            with engine_emp.connect() as conn:
+huisnummer -> HouseNumber
 
-                row = conn.execute(
-                    text(query),
-                    {"name": name}
-                ).fetchone()
+stad -> City
+city -> City
 
-            if row and row[0]:
+If the user asks employee information
+but no employee name is present:
 
-                return str(row[0])
+return:
+missing_name
 
-            return "Geen gegevens gevonden."
+Examples:
 
-        except Exception as e:
+wat is het telefoonnummer van ranya
+employee_lookup|ranya|Mobile
 
-            print(e)
+wat is de email van mike
+employee_lookup|mike|Mail
 
-            return "Database fout."
+wat is de straatnaam van ranya
+employee_lookup|ranya|Street
 
-    return result
+wat is de stad van ranya
+employee_lookup|ranya|City
+
+wat is het huisnummer
+missing_name
+
+IMPORTANT:
+
+If the requested field is BirthOfDate:
+
+- Use DateOfBirth to calculate the BirthOfDate.
+- Age means:
+current year - birth year
+
+USER MESSAGE:
+{msg}
+"""
+
+        response = llm.invoke(prompt)
+
+        if not response or not response.content:
+
+            return "Geen antwoord ontvangen van de interne parser."
+
+        result = response.content.strip()
+
+        print("RAW LLM RESULT:")
+        print(result)
+
+        clean_result = result.strip()
+
+        # Check of de LLM de lookup-string heeft gegenereerd
+        if clean_result.lower().startswith("employee_lookup|"):
+
+            try:
+
+                _, name, field = clean_result.split("|", 2)
+
+                allowed_fields = {
+                    "Mobile",
+                    "Mail",
+                    "FunctionDesc",
+                    "DateOfBirth",
+                    "EmploymentStart",
+                    "Street",
+                    "ZIPCode",
+                    "HouseNumber",
+                    "City"
+                }
+
+                if field not in allowed_fields:
+
+                    return f"Ongeldig veld opgevraagd: {field}."
+
+                query = f"""
+                SELECT TOP 1 {field}
+                FROM afas.Bring_Employees
+                WHERE
+                    LOWER(FirstName) = LOWER(:name)
+                    OR LOWER(BirthName) = LOWER(:name)
+                """
+
+                with engine_emp.connect() as conn:
+
+                    row = conn.execute(
+                        text(query),
+                        {"name": name}
+                    ).fetchone()
+
+                if row and row[0]:
+
+                    return str(row[0])
+
+                return f"Geen gegevens gevonden voor medewerker {name}."
+
+            except Exception as e:
+
+                print(e)
+
+                return "Database fout bij het ophalen van de gegevens."
+
+        # Specifieke fallback wanneer de naam ontbreekt in de prompt
+        if "missing_name" in clean_result.lower():
+            return "Ik help je graag met zoeken naar medewerkersinformatie, maar over welke medewerker gaat je vraag?"
+
+        return clean_result
+
+    # Ultieme fallback mocht er een onbekende status zijn
+    return "Kies een optie om te beginnen."
 
 class ChatReq(BaseModel):
 
@@ -273,7 +386,7 @@ async def chat(req: ChatReq):
         )
     )
 
-    save_chat_memory(req.message, ans)
+    save_chat_memory(req.session_id, req.message, ans)
 
     return {
         "answer": ans,
@@ -282,6 +395,7 @@ async def chat(req: ChatReq):
 
 @app.post("/chat/reset/{session_id}")
 async def reset_chat(session_id: str):
+# CORRECT
 
     reset_state(session_id)
 
@@ -292,49 +406,23 @@ async def reset_chat(session_id: str):
 
 
 
-# =========================
-# LOGIN MODEL
-# =========================
-
 class LoginReq(BaseModel):
 
     email: str
     password: str
 
 
-# =========================
-# LOGIN ROUTE
-# =========================
-
 @app.post("/login")
-
 def login(req: LoginReq):
 
-    # ====================================
-    # FAKE ADMIN ACCOUNT
-    # ====================================
+    print(req.email)
+    print(req.password)
 
-    if (
 
-        req.email == "admin@bring.com"
-
-        and
-
-        req.password == "Admin123!"
-
-    ):
-
-        return {
-            "success": True
-        }
-
-    # ====================================
-    # FAILED LOGIN
-    # ====================================
 
     return {
-        "success": False
-    }
+            "success": True
+        }
 
 if __name__ == "__main__":
     import uvicorn
