@@ -26,7 +26,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 def make_engine(server, database, username, password):
 
     odbc_str = (
@@ -82,7 +81,6 @@ llm = ChatOllama(
     headers=headers
 )
 
-
 def create_empty_state():
 
     return {
@@ -97,7 +95,6 @@ def create_empty_state():
             "waiting_for_continue": False
         }
     }
-
 
 def get_user_state(session_id: str):
 
@@ -145,7 +142,6 @@ def answer_question(question: str, session_id: str):
 
         return "Wat is je vraag?"
 
-
     # =================================================
     # 2. MODE: TRACKING
     # =================================================
@@ -192,7 +188,7 @@ def answer_question(question: str, session_id: str):
 
     if state["mode"] == "internal":
 
-        prompt = f"""
+        sql_prompt = f"""
 You are a parser.
 You are NOT a chatbot.
 
@@ -286,69 +282,50 @@ current year - birth year
 USER MESSAGE:
 {msg}
 """
+        sql_response = llm.invoke(sql_prompt)
 
-        response = llm.invoke(prompt)
+    if not sql_response or not sql_response.content:
 
-        if not response or not response.content:
+        return "Geen SQL ontvangen."
 
-            return "Geen antwoord ontvangen van de interne parser."
+    sql_query = sql_response.content.strip()
 
-        result = response.content.strip()
+    print("GENERATED SQL:")
+    print(sql_query)
 
-        print("RAW LLM RESULT:")
-        print(result)
+    try:
 
-        clean_result = result.strip()
+        with engine_emp.connect() as conn:
 
-        # Check of de LLM de lookup-string heeft gegenereerd
-        if clean_result.lower().startswith("employee_lookup|"):
+            result = conn.execute(
+                text(sql_query)
+            )
 
-            try:
+            rows = result.fetchall()
 
-                _, name, field = clean_result.split("|", 2)
+            if not rows:
 
-                allowed_fields = {
-                    "Mobile",
-                    "Mail",
-                    "FunctionDesc",
-                    "DateOfBirth",
-                    "EmploymentStart",
-                    "Street",
-                    "ZIPCode",
-                    "HouseNumber",
-                    "City"
-                }
+                return "Geen resultaten gevonden."
 
-                if field not in allowed_fields:
+            formatted = []
 
-                    return f"Ongeldig veld opgevraagd: {field}."
+            for row in rows:
 
-                query = f"""
-                SELECT TOP 1 {field}
-                FROM afas.Bring_Employees
-                WHERE
-                    LOWER(FirstName) = LOWER(:name)
-                    OR LOWER(BirthName) = LOWER(:name)
-                """
+                formatted.append(
+                    dict(row._mapping)
+                )
 
-                with engine_emp.connect() as conn:
+            return json.dumps(
+                formatted,
+                indent=2,
+                ensure_ascii=False
+            )
 
-                    row = conn.execute(
-                        text(query),
-                        {"name": name}
-                    ).fetchone()
+    except Exception as e:
 
-                if row and row[0]:
+        print(e)
 
-                    return str(row[0])
-
-                return f"Geen gegevens gevonden voor medewerker {name}."
-
-            except Exception as e:
-
-                print(e)
-
-                return "Database fout bij het ophalen van de gegevens."
+        return f"SQL fout: {str(e)}"
 
         # Specifieke fallback wanneer de naam ontbreekt in de prompt
         if "missing_name" in clean_result.lower():
@@ -356,7 +333,6 @@ USER MESSAGE:
 
         return clean_result
 
-    # Ultieme fallback mocht er een onbekende status zijn
     return "Kies een optie om te beginnen."
 
 class ChatReq(BaseModel):
@@ -402,7 +378,6 @@ class LoginReq(BaseModel):
     email: str
     password: str
 
-
 @app.post("/login")
 def login(req: LoginReq):
 
@@ -415,5 +390,4 @@ def login(req: LoginReq):
 
 if __name__ == "__main__":
     import uvicorn
-    
     uvicorn.run(app, host="0.0.0.0", port=8000)
