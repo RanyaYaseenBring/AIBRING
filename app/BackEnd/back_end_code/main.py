@@ -195,7 +195,6 @@ You are NOT a chatbot.
 Return ONLY one of these formats:
 
 employee_lookup|name|field
-normal_chat
 missing_name
 
 Never explain anything.
@@ -327,12 +326,6 @@ USER MESSAGE:
 
         return f"SQL fout: {str(e)}"
 
-        # Specifieke fallback wanneer de naam ontbreekt in de prompt
-        if "missing_name" in clean_result.lower():
-            return "Ik help je graag met zoeken naar medewerkersinformatie, maar over welke medewerker gaat je vraag?"
-
-        return clean_result
-
     return "Kies een optie om te beginnen."
 
 class ChatReq(BaseModel):
@@ -364,8 +357,6 @@ async def chat(req: ChatReq):
 
 @app.post("/chat/reset/{session_id}")
 async def reset_chat(session_id: str):
-# CORRECT
-
     reset_state(session_id)
 
     return {
