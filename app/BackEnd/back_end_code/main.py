@@ -105,6 +105,33 @@ def reset_state(session_id: str):
     chat_sessions[session_id] = create_empty_state()
 
 
+def get_database_schema():
+
+    schema_text = ""
+
+    query = text("""
+    SELECT 
+        TABLE_SCHEMA,
+        TABLE_NAME,
+        COLUMN_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    ORDER BY TABLE_NAME
+    """)
+
+    with engine_emp.connect() as conn:
+
+        rows = conn.execute(query).fetchall()
+
+        for row in rows:
+
+            schema_text += (
+                f"Table: {row.TABLE_SCHEMA}.{row.TABLE_NAME} "
+                f"- Column: {row.COLUMN_NAME}\n"
+            )
+
+    return schema_text
+
+
 def answer_question(question: str, session_id: str):
 
     msg = question.strip()
@@ -119,7 +146,7 @@ def answer_question(question: str, session_id: str):
     if msg_lower in ["algemene vraag", "algemene_vraag"]:
 
         state["mode"] = "general"
-
+        schema_info = get_database_schema()
         return "Hallo! Hoe kan ik u vandaag helpen?"
 
     # =========================
@@ -318,10 +345,13 @@ If the requested field is DateOfBirth:
 current year - birth year
 - Return the calculated age instead of the birth date.
 
+
+DATABASE SCHEMA:
+
+{schema_info}
 USER MESSAGE:
 {msg}
 """
-
         response = llm.invoke(sql_prompt).content.strip()
 
         if response == "missing_name":
@@ -376,7 +406,6 @@ USER MESSAGE:
             return f"SQL fout: {str(e)}"
 
     return "Kies een optie om te beginnen."
-
 
 class ChatReq(BaseModel):
 
