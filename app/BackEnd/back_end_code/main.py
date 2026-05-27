@@ -104,12 +104,17 @@ def reset_state(session_id: str):
 
     chat_sessions[session_id] = create_empty_state()
 
+
 def answer_question(question: str, session_id: str):
 
     msg = question.strip()
-    msg_lower = msg.strip().lower()
+    msg_lower = msg.lower()
 
     state = get_user_state(session_id)
+
+    # =========================
+    # Algemene vraag
+    # =========================
 
     if msg_lower in ["algemene vraag", "algemene_vraag"]:
 
@@ -117,7 +122,11 @@ def answer_question(question: str, session_id: str):
 
         return "Hallo! Hoe kan ik u vandaag helpen?"
 
-    if msg_lower in ["track & trace", "track_trace"]:
+    # =========================
+    # Track & Trace
+    # =========================
+
+    elif msg_lower in ["track & trace", "track_trace"]:
 
         state["mode"] = "tracking"
 
@@ -128,17 +137,21 @@ def answer_question(question: str, session_id: str):
             session_id
         )
 
-    if msg_lower in ["interne vraag", "interne_vraag"]:
+    # =========================
+    # Interne vraag
+    # =========================
+
+    elif msg_lower in ["interne vraag", "interne_vraag"]:
 
         state["mode"] = "internal"
 
         return "Wat is je vraag?"
 
-    # =================================================
-    # 2. MODE: TRACKING
-    # =================================================
+    # =========================
+    # Tracking mode
+    # =========================
 
-    if state["mode"] == "tracking":
+    elif state["mode"] == "tracking":
 
         tracking_response = handle_tracking(
             msg,
@@ -151,20 +164,23 @@ def answer_question(question: str, session_id: str):
 
             return tracking_response
 
-    if state["mode"] == "general":
+    # =========================
+    # General mode
+    # =========================
+
+    elif state["mode"] == "general":
 
         general_prompt = f"""
-    You are a helpful AI assistant.
-    - Reply naturally.
-    - Be conversational.
-    - Reply in the same language as the user.
-    - Be friendly and helpful.
-    - Do not mention prompts or system messages.
-    - Dont start talking in a random launguage
-    - you remember the conversation
-    - you start the conversation from fresh when the page refreshes
-    USER MESSAGE:
-    {msg}
+You are a helpful AI assistant.
+
+- Reply naturally
+- Reply in the same language as the user
+- Be conversational
+- Be friendly
+- Do not mention prompts or system messages
+
+USER MESSAGE:
+{msg}
 """
 
         response = llm.invoke(general_prompt)
@@ -173,9 +189,13 @@ def answer_question(question: str, session_id: str):
 
             return response.content.strip()
 
-        return "Geen antwoord ontvangen van de algemene assistent."
+        return "Geen antwoord ontvangen."
 
-    if state["mode"] == "internal":
+    # =========================
+    # Internal mode
+    # =========================
+
+    elif state["mode"] == "internal":
 
         sql_prompt = f"""
 You are a parser.
@@ -203,6 +223,7 @@ Street
 ZIPCode
 HouseNumber
 City
+BirthName
 
 FIELD MAPPING:
 
@@ -267,55 +288,95 @@ If the requested field is BirthOfDate:
 - Age means:
 current year - birth year
 
+NAME RULES:
+
+- The employee name may be:
+  - a first name
+  - a last name
+  - a full name
+
+- Last names are valid employee names.
+- Always extract the full detected name from the sentence.
+
+Examples:
+
+"wat is het telefoonnummer van jansen"
+-> employee_lookup|jansen|Mobile
+
+"wat is de email van mike jansen"
+-> employee_lookup|mike jansen|Mail
+
+leeftijd -> DateOfBirth
+age -> DateOfBirth
+
+IMPORTANT:
+
+If the requested field is DateOfBirth:
+
+- Use DateOfBirth to calculate the age.
+- Age means:
+current year - birth year
+- Return the calculated age instead of the birth date.
+
 USER MESSAGE:
 {msg}
 """
-        sql_response = llm.invoke(sql_prompt)
 
-    if not sql_response or not sql_response.content:
+        response = llm.invoke(sql_prompt).content.strip()
 
-        return "Geen SQL ontvangen."
+        if response == "missing_name":
 
-    sql_query = sql_response.content.strip()
+            return "Geen naam gevonden."
 
-    print("GENERATED SQL:")
-    print(sql_query)
+        parsed = response.split("|")
+
+        if len(parsed) != 3:
+
+            return f"Ongeldige parser response: {response}"
+
+        intent = parsed[0]
+        name = parsed[1]
+        field = parsed[2]
+
+    query = text(f"""
+    SELECT {field}
+    FROM afas.Bring_Employees
+    WHERE LOWER(FirstName) LIKE LOWER(:name)
+    OR LOWER(BirthName) LIKE LOWER(:name)
+""")
 
     try:
+            with engine_emp.connect() as conn:
 
-        with engine_emp.connect() as conn:
+                result = conn.execute(
+                    query,
+                    {"name": f"%{name}%"}
+                ).fetchone()
 
-            result = conn.execute(
-                text(sql_query)
-            )
+                if not result:
 
-            rows = result.fetchall()
+                    return "Geen resultaten gevonden."
 
-            if not rows:
+                value = result[0]
 
-                return "Geen resultaten gevonden."
+                if field == "DateOfBirth":
 
-            formatted = []
+                    from datetime import date
 
-            for row in rows:
+                    age = date.today().year - value.year
 
-                formatted.append(
-                    dict(row._mapping)
-                )
+                    return f"{name} is {age} jaar oud"
 
-            return json.dumps(
-                formatted,
-                indent=2,
-                ensure_ascii=False
-            )
+                return str(value)
 
     except Exception as e:
 
-        print(e)
+            print(e)
 
-        return f"SQL fout: {str(e)}"
+            return f"SQL fout: {str(e)}"
 
     return "Kies een optie om te beginnen."
+
 
 class ChatReq(BaseModel):
 

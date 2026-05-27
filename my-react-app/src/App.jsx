@@ -259,21 +259,10 @@ function App() {
           >
             Sign In
           </button>
-
-          <button
-            className="switch-button"
-            onClick={() => setPage("signup")}
-          >
-            Sign Up
-          </button>
         </div>
       </div>
     );
   }
-
-  /* =========================
-     SIGNUP PAGE
-  ========================= */
 
   if (page === "signup") {
     return (
@@ -343,6 +332,34 @@ function App() {
               Ingelogd als: <strong>{username}</strong>
             </p>
           </div>
+
+        {/* ADMIN PANEL BUTTON */}
+        {username === "admin" && (
+          <button
+            onClick={() => setPage("signup")}
+            style={{
+              padding: "8px 16px",
+              background: "rgba(82, 255, 47, 0.15)",
+              border: "1px solid rgba(82, 255, 47, 0.4)",
+              borderRadius: "10px",
+              color: "#b7ffb0",
+              cursor: "pointer",
+              fontWeight: "500",
+              fontSize: "14px",
+              transition: "0.2s ease",
+              marginRight: "10px"
+            }}
+            onMouseOver={(e) =>
+              e.target.style.background = "rgba(82,255,47,0.25)"
+            }
+            onMouseOut={(e) =>
+              e.target.style.background = "rgba(82,255,47,0.15)"
+            }
+          >
+            Admin Panel
+          </button>
+        )}
+
           
           {/* UITLOG KNOP */}
           <button 
