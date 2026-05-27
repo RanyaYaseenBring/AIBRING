@@ -2,7 +2,6 @@ import urllib.parse
 import base64
 import json
 import asyncio
-
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
@@ -12,8 +11,6 @@ from pydantic import BaseModel
 from langchain_ollama import ChatOllama
 from ChatBotMemory import save_chat_memory
 from track_traceFunction import handle_tracking
-from latest_order import get_latest_order
-
 app = FastAPI()
 
 chat_sessions = {}
@@ -44,7 +41,6 @@ def make_engine(server, database, username, password):
         + urllib.parse.quote_plus(odbc_str),
         pool_pre_ping=True
     )
-
 
 engine_emp = make_engine(
     "sql-bringbi-prod-001.database.windows.net",
@@ -115,10 +111,6 @@ def answer_question(question: str, session_id: str):
 
     state = get_user_state(session_id)
 
-    # =================================================
-    # 1. BUTTONS CHAT-INPUTS
-    # =================================================
-
     if msg_lower in ["algemene vraag", "algemene_vraag"]:
 
         state["mode"] = "general"
@@ -182,9 +174,6 @@ def answer_question(question: str, session_id: str):
             return response.content.strip()
 
         return "Geen antwoord ontvangen van de algemene assistent."
-    # =================================================
-    # 4. MODE: INTERNAL (MEDEWERKERS PARSER)
-    # =================================================
 
     if state["mode"] == "internal":
 
