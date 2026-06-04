@@ -446,7 +446,27 @@ Parttime
 Full-time
 Part-time
 
+WOONPLAATS VRAGEN
 
+Als de gebruiker vraagt:
+
+- wie wonen er in ...
+- welke collega's wonen er in ...
+- medewerkers uit ...
+- wie komen uit ...
+
+Gebruik ALTIJD:
+
+afas.Profit_Employees
+
+Kolommen:
+- City
+- FirstName
+- BirthName
+
+Gebruik NOOIT:
+
+afas.Bring_KnOrganisation
 
 Gebruikersvraag:
 {question}
