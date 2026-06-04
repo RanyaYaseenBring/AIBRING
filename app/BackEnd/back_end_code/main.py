@@ -1,20 +1,29 @@
 import urllib.parse
 import base64
 import json
-import asyncio
-from fastapi import FastAPI, WebSocket
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import create_engine, text
-from fastapi import FastAPI, WebSocket
 from pydantic import BaseModel
 from langchain_ollama import ChatOllama
+
 from ChatBotMemory import save_chat_memory
 from track_traceFunction import handle_tracking
+
+import urllib.parse
+import base64
+import json
+import re
+from Tables import SCHEMA
 app = FastAPI()
 
 chat_sessions = {}
-last_order_cache = None
+
+# =========================
+# CORS
+# =========================
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,24 +32,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# =========================
+# DATABASE CONNECTION
+# =========================
+
 def make_engine(server, database, username, password):
 
     odbc_str = (
-    f"DRIVER={{ODBC Driver 18 for SQL Server}};"
-    f"SERVER=tcp:{server},1433;"
-    f"DATABASE={database};"
-    f"UID={username};"
-    f"PWD={password};"
-    f"Encrypt=yes;"
-    f"TrustServerCertificate=yes;"
-    f"Connection Timeout=30;"
-)
+        f"DRIVER={{ODBC Driver 18 for SQL Server}};"
+        f"SERVER=tcp:{server},1433;"
+        f"DATABASE={database};"
+        f"UID={username};"
+        f"PWD={password};"
+        f"Encrypt=yes;"
+        f"TrustServerCertificate=yes;"
+        f"Connection Timeout=30;"
+    )
 
     return create_engine(
         "mssql+pyodbc:///?odbc_connect="
         + urllib.parse.quote_plus(odbc_str),
         pool_pre_ping=True
     )
+
+# =========================
+# DATABASES
+# =========================
 
 engine_emp = make_engine(
     "sql-bringbi-prod-001.database.windows.net",
@@ -55,6 +72,10 @@ engine_track = make_engine(
     "svc_CHATBOT",
     "GB94QV4e48NH8Vz"
 )
+
+# =========================
+# OLLAMA
+# =========================
 
 username_llm = "ITSupport"
 password_llm = "blistering-plafond-useless"
@@ -72,10 +93,14 @@ headers = {
 llm = ChatOllama(
     model="llama3.1:latest",
     temperature=0,
-    num_ctx=512,
+    num_ctx=8192,
     base_url="http://172.20.20.181:11434",
     headers=headers
 )
+
+# =========================
+# SESSION STATE
+# =========================
 
 def create_empty_state():
 
@@ -104,33 +129,48 @@ def reset_state(session_id: str):
 
     chat_sessions[session_id] = create_empty_state()
 
+# =========================
+# DATABASE SCHEMA
+# =========================
 
-def get_database_schema():
+def get_tables_for_prompt():
+    text = ""
 
-    schema_text = ""
+    for table_name, info in SCHEMA.items():
+        text += f"- {table_name}: {info['description']}\n"
 
-    query = text("""
-    SELECT 
-        TABLE_SCHEMA,
-        TABLE_NAME,
-        COLUMN_NAME
-    FROM INFORMATION_SCHEMA.COLUMNS
-    ORDER BY TABLE_NAME
-    """)
+    return text
 
-    with engine_emp.connect() as conn:
 
-        rows = conn.execute(query).fetchall()
+def get_columns_for_table(table_name):
+    return SCHEMA.get(table_name, {}).get("columns", [])
 
-        for row in rows:
 
-            schema_text += (
-                f"Table: {row.TABLE_SCHEMA}.{row.TABLE_NAME} "
-                f"- Column: {row.COLUMN_NAME}\n"
-            )
+def clean_table_name(response):
+    response = response.strip()
 
-    return schema_text
+    for table_name in SCHEMA.keys():
+        if table_name.lower() in response.lower():
+            return table_name
 
+    return None
+
+
+def clean_sql_response(response):
+    match = re.search(r"(SELECT[\s\S]*)", response, re.IGNORECASE)
+
+    if not match:
+        return None
+
+    sql = match.group(1).strip()
+    sql = sql.replace("```sql", "").replace("```", "").strip()
+
+    return sql
+
+       
+# =========================
+# MAIN CHAT FUNCTION
+# =========================
 
 def answer_question(question: str, session_id: str):
 
@@ -140,17 +180,17 @@ def answer_question(question: str, session_id: str):
     state = get_user_state(session_id)
 
     # =========================
-    # Algemene vraag
+    # ALGEMENE VRAAG
     # =========================
 
     if msg_lower in ["algemene vraag", "algemene_vraag"]:
 
         state["mode"] = "general"
-        schema_info = get_database_schema()
+
         return "Hallo! Hoe kan ik u vandaag helpen?"
 
     # =========================
-    # Track & Trace
+    # TRACK & TRACE
     # =========================
 
     elif msg_lower in ["track & trace", "track_trace"]:
@@ -165,252 +205,355 @@ def answer_question(question: str, session_id: str):
         )
 
     # =========================
-    # Interne vraag
+    # INTERNE MODUS STARTEN
     # =========================
 
-    elif msg_lower in ["interne vraag", "interne_vraag"]:
+    elif msg_lower in ["interne vraag", "intern"]:
 
         state["mode"] = "internal"
 
-        return "Wat is je vraag?"
+        return "Interne modus geactiveerd. Stel uw vraag."
 
     # =========================
-    # Tracking mode
-    # =========================
-
-    elif state["mode"] == "tracking":
-
-        tracking_response = handle_tracking(
-            msg,
-            engine_track,
-            llm,
-            session_id
-        )
-
-        if tracking_response is not None:
-
-            return tracking_response
-
-    # =========================
-    # General mode
-    # =========================
-
-    elif state["mode"] == "general":
-
-        general_prompt = f"""
-You are a helpful AI assistant.
-
-- Reply naturally
-- Reply in the same language as the user
-- Be conversational
-- Be friendly
-- Do not mention prompts or system messages
-
-USER MESSAGE:
-{msg}
-"""
-
-        response = llm.invoke(general_prompt)
-
-        if response and response.content:
-
-            return response.content.strip()
-
-        return "Geen antwoord ontvangen."
-
-    # =========================
-    # Internal mode
+    # INTERNE SQL VRAGEN
     # =========================
 
     elif state["mode"] == "internal":
 
-        sql_prompt = f"""
-You are a parser.
-You are NOT a chatbot.
+        # =========================
+        # STAP 1: TABEL KIEZEN
+        # =========================
 
-Return ONLY one of these formats:
+        table_prompt = f"""
+Jij bent een database expert.
 
-employee_lookup|name|field
-missing_name
+Gebruikersvraag:
+{question}
 
-Never explain anything.
-No extra text.
-No reasoning.
-No notes.
-No markdown.
+Beschikbare tabellen:
+{get_tables_for_prompt()}
 
-VALID FIELDS:
+BELANGRIJKE REGELS:
 
-Mobile
-Mail
-FunctionDesc
-DateOfBirth
-EmploymentStart
-Street
-ZIPCode
-HouseNumber
-City
-BirthName
+- BSN -> afas.Profit_Employees
+- telefoon -> afas.Profit_Employees
+- mobiel -> afas.Profit_Employees
+- email medewerker -> afas.Profit_Employees
+- adres -> afas.Profit_Employees
 
-FIELD MAPPING:
+- fulltime -> afas.Bring_Employees
+- parttime -> afas.Bring_Employees
+- FTE -> afas.Bring_Employees
+- uren per week -> afas.Bring_Employees
 
-telefoon -> Mobile
-telefoonnummer -> Mobile
-mobiel -> Mobile
-mobile -> Mobile
-phone -> Mobile
-telefoon nummer -> Mobile
+- ziekte -> afas.Bring_Verzuim
+- aanwezig -> afas.Bring_Verzuim
+- afwezig -> afas.Bring_Verzuim
 
-email -> Mail
-mail -> Mail
+- vakantiedagen -> afas.Profit_LeaveBalance
+- verlofsaldo -> afas.Profit_LeaveBalance
 
-functie -> FunctionDesc
-job -> FunctionDesc
+- login -> afas.Profit_Users
+- gebruiker -> afas.Profit_Users
+- UPN -> afas.Profit_Users
 
-verjaardag -> DateOfBirth
-birthday -> DateOfBirth
-
-startdatum -> EmploymentStart
-
-straatnaam -> Street
-straat -> Street
-street -> Street
-
-postcode -> ZIPCode
-zipcode -> ZIPCode
-
-huisnummer -> HouseNumber
-
-stad -> City
-city -> City
-
-If the user asks employee information
-but no employee name is present:
-
-return:
-missing_name
-
-Examples:
-
-wat is het telefoonnummer van ranya
-employee_lookup|ranya|Mobile
-
-wat is de email van mike
-employee_lookup|mike|Mail
-
-wat is de straatnaam van ranya
-employee_lookup|ranya|Street
-
-wat is de stad van ranya
-employee_lookup|ranya|City
-
-wat is het huisnummer
-missing_name
-
-IMPORTANT:
-
-If the requested field is BirthOfDate:
-
-- Use DateOfBirth to calculate the BirthOfDate.
-- Age means:
-current year - birth year
-
-NAME RULES:
-
-- The employee name may be:
-  - a first name
-  - a last name
-  - a full name
-
-- Last names are valid employee names.
-- Always extract the full detected name from the sentence.
-
-Examples:
-
-"wat is het telefoonnummer van jansen"
--> employee_lookup|jansen|Mobile
-
-"wat is de email van mike jansen"
--> employee_lookup|mike jansen|Mail
-
-leeftijd -> DateOfBirth
-age -> DateOfBirth
-
-IMPORTANT:
-
-If the requested field is DateOfBirth:
-
-- Use DateOfBirth to calculate the age.
-- Age means:
-current year - birth year
-- Return the calculated age instead of the birth date.
-
-
-DATABASE SCHEMA:
-
-{schema_info}
-USER MESSAGE:
-{msg}
+Geef ALLEEN de tabelnaam terug.
+Geen uitleg.
+Geen SQL.
+Geen markdown.
 """
+        table_response = llm.invoke(table_prompt).content.strip()
+
+        print("========== TABLE RESPONSE ==========")
+        print(table_response)
+
+        selected_table = clean_table_name(table_response)
+
+        if not selected_table:
+            return f"Geen tabel gevonden. AI antwoordde: {table_response}"
+
+        print("========== SELECTED TABLE ==========")
+        print(selected_table)
+
+        table_info = SCHEMA[selected_table]
+        columns = table_info["columns"]
+        columns_text = "\n".join(columns)
+
+        # =========================
+        # STAP 2: SQL GENEREREN
+        # =========================
+
+        sql_prompt = f"""
+Je bent een SQL Server query generator.
+Gebruikersvraag:
+{question}
+
+Database resultaat:
+Regels:
+- Gebruik ALLEEN de data uit het database resultaat.
+- Verzin NOOIT gegevens.
+- Als er geen resultaten zijn, zeg exact:
+  'Geen resultaten gevonden.'
+- Als er resultaten zijn, noem deze resultaten.
+
+BELANGRIJK:
+- Je geeft ALLEEN SQL terug
+- Geen uitleg
+- Geen markdown
+- Geen waarschuwingen
+- Geen weigeringen
+- Gebruik alleen SELECT
+- Gebruik TOP 10 tenzij anders gevraagd
+- Gebruik GEEN LIMIT
+- Gebruik GEEN DELETE, UPDATE, INSERT, DROP, ALTER, CREATE, TRUNCATE of MERGE
+- Gebruik alleen deze tabel
+- Gebruik alleen bestaande kolommen
+- Verzin geen kolommen
+- Verzin geen tabellen
+
+BELANGRIJKE REGELS
+
+Voor afas.Bring_Verzuim:
+
+- Medewerker is GEEN naam.
+- Naam bevat de medewerkernaam.
+- Zoek medewerkers altijd via Naam.
+
+Voorbeeld:
+
+SELECT TOP 10 *
+FROM afas.Bring_Verzuim
+WHERE Naam LIKE '%Ranya%'
+
+Persoonsnaam zoeken:
+
+afas.Profit_Employees:
+- FirstName
+
+Gebruik ALTIJD deze kolommen voor naamzoeken.
+Gebruik NOOIT andere kolommen voor persoonsnamen.
+
+
+VOORBEELDEN
+
+Vraag:
+Wie wonen er in Dordrecht?
+
+Tabel:
+afas.Profit_Employees
+
+Vraag:
+Wie wonen er in Rotterdam?
+
+Tabel:
+afas.Profit_Employees
+
+Vraag:
+Wie zijn er geboren in maart?
+
+Tabel:
+afas.Profit_Employees
+
+Vraag:
+Wie is er ziek vandaag?
+
+Tabel:
+afas.Bring_Verzuim
+
+Vraag:
+Wie is er afwezig?
+
+Tabel:
+afas.Bring_Verzuim
+
+Vraag:
+Wie werkt fulltime?
+
+Tabel:
+afas.Bring_Employees
+
+Vraag:
+Wie heeft nog vakantiedagen?
+
+Tabel:
+afas.Profit_LeaveBalance
+
+Persoonsgegevens
+→ Profit_Employees
+
+Contracten
+→ Bring_Employees
+
+Verzuim
+→ Bring_Verzuim
+
+Vakantiedagen
+→ Profit_LeaveBalance
+
+Gebruikersaccounts
+→ Profit_Users
+Tabel:
+{selected_table}
+
+Beschrijving:
+{table_info["description"]}
+
+Beschikbare kolommen:
+{columns_text}
+
+Regels voor kolommen:
+- telefoon -> Phone of Mobile
+- email/mail -> Mail of Email
+- BSN -> BSN
+- fulltime/parttime -> EmploymentTypeDesc
+- uren per week -> HourPerWeek
+- FTE -> FTE
+
+Naam zoeken:
+Als FirstName en BirthName bestaan, zoek dan altijd zo:
+WHERE FirstName LIKE '%naam%'
+OR BirthName LIKE '%achternaam%'
+
+Voorbeeld:
+SELECT TOP 10 Phone
+FROM afas.Bring_Employees
+WHERE FirstName LIKE '%Jan%'
+
+FULLTIME / PARTTIME
+
+Gebruik EmploymentTypeDesc.
+
+Mogelijke waarden:
+
+- Fulltimer
+- Parttimer
+- Oproepkracht
+- Stagiair
+- Vaste medewerker
+
+Voor fulltime:
+
+WHERE EmploymentTypeDesc LIKE '%Full%'
+
+Voor parttime:
+
+WHERE EmploymentTypeDesc LIKE '%Part%'
+
+Gebruik NOOIT:
+
+Fulltime
+Parttime
+Full-time
+Part-time
+
+
+
+Gebruikersvraag:
+{question}
+"""
+
         response = llm.invoke(sql_prompt).content.strip()
 
-        if response == "missing_name":
+        print("========== RAW SQL RESPONSE ==========")
+        print(response)
 
-            return "Geen naam gevonden."
+        sql_query = clean_sql_response(response)
 
-        parsed = response.split("|")
+        if not sql_query:
+            return f"RAW RESPONSE: {response}"
 
-        if len(parsed) != 3:
+        print("========== SQL QUERY ==========")
+        print(sql_query)
 
-            return f"Ongeldige parser response: {response}"
+        # =========================
+        # VEILIGHEID
+        # =========================
 
-        intent = parsed[0]
-        name = parsed[1]
-        field = parsed[2]
+        sql_query_lower = sql_query.lower().strip()
 
-    query = text(f"""
-    SELECT {field}
-    FROM afas.Bring_Employees
-    WHERE LOWER(FirstName) LIKE LOWER(:name)
-    OR LOWER(BirthName) LIKE LOWER(:name)
-""")
+        blocked_words = [
+            "drop",
+            "delete",
+            "update",
+            "insert",
+            "alter",
+            "create",
+            "truncate",
+            "merge"
+        ]
 
-    try:
+        if not sql_query_lower.startswith("select"):
+            return "Alleen SELECT queries zijn toegestaan."
+
+        if any(word in sql_query_lower for word in blocked_words):
+            return "Alleen veilige SELECT queries zijn toegestaan."
+
+        try:
             with engine_emp.connect() as conn:
+                result = conn.execute(text(sql_query))
+                rows = result.fetchall()
 
-                result = conn.execute(
-                    query,
-                    {"name": f"%{name}%"}
-                ).fetchone()
-
-                if not result:
-
+                if not rows:
                     return "Geen resultaten gevonden."
 
-                value = result[0]
+                formatted = []
 
-                if field == "DateOfBirth":
+                for row in rows:
+                    formatted.append(dict(row._mapping))
 
-                    from datetime import date
+                formatted_json = json.dumps(
+                    formatted,
+                    indent=2,
+                    ensure_ascii=False,
+                    default=str
+                )
 
-                    age = date.today().year - value.year
+                final_prompt = f"""
+Gebruikersvraag:
+{question}
 
-                    return f"{name} is {age} jaar oud"
+Database resultaat:
+{formatted_json}
 
-                return str(value)
+Geef een kort duidelijk Nederlands antwoord.
+"""
 
-    except Exception as e:
+                final_answer = llm.invoke(final_prompt).content.strip()
 
+                return final_answer
+
+        except Exception as e:
+            print("SQL ERROR:")
             print(e)
 
             return f"SQL fout: {str(e)}"
+        print(e)
 
-    return "Kies een optie om te beginnen."
+        return f"SQL fout: {str(e)}"
+
+    # =========================
+    # FALLBACK
+    # =========================
+
+    return "Ik begrijp de vraag niet."
+
+# =========================
+# REQUEST MODELS
+# =========================
 
 class ChatReq(BaseModel):
 
     message: str
     session_id: str | None = None
+
+class LoginReq(BaseModel):
+
+    email: str
+    password: str
+
+# =========================
+# CHAT ENDPOINT
+# =========================
 
 @app.post("/chat")
 async def chat(req: ChatReq):
@@ -420,33 +563,32 @@ async def chat(req: ChatReq):
         or "default-session"
     )
 
-    ans = await run_in_threadpool(
-        lambda: answer_question(
-            req.message,
-            session_id
-        )
-    )
+    try:
 
-    save_chat_memory(req.session_id, req.message, ans)
+        ans = await run_in_threadpool(
+            lambda: answer_question(
+                req.message,
+                session_id
+            )
+        )
+
+    except Exception as e:
+
+        print("CHAT ERROR:")
+        print(e)
+
+        ans = f"Backend fout: {str(e)}"
+
+    save_chat_memory(
+        session_id,
+        req.message,
+        ans
+    )
 
     return {
         "answer": ans,
         "session_id": session_id
     }
-
-@app.post("/chat/reset/{session_id}")
-async def reset_chat(session_id: str):
-    reset_state(session_id)
-
-    return {
-        "status": "reset",
-        "session_id": session_id
-    }
-
-class LoginReq(BaseModel):
-
-    email: str
-    password: str
 
 @app.post("/login")
 def login(req: LoginReq):
@@ -455,9 +597,19 @@ def login(req: LoginReq):
     print(req.password)
 
     return {
-            "success": True
-        }
+        "success": True
+    }
+
+# =========================
+# START SERVER
+# =========================
 
 if __name__ == "__main__":
+
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000
+    )

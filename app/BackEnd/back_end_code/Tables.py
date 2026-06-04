@@ -1,241 +1,545 @@
-from sqlalchemy import text
-from main import engine
-# =========================================================
-# TABLE GROUPS
-# =========================================================
+SCHEMA = {
 
-TABLE_GROUPS = {
+    "etl.APITokens": {
+        "description": "API tokens, authenticatie, client credentials en omgevingen",
+        "columns": [
+            "EnvironmentType",
+            "EnvironmentCode",
+            "Token",
+            "State",
+            "Description",
+            "API_Token",
+            "CreatedAt",
+            "UpdatedAt",
+            "client_id",
+            "client_secret"
+        ]
+    },
 
-    "employees": [
-        "afas.Bring_Employees",
-        "afas.Profit_Employees",
-        "afas.Profit_Users",
-        "afas.Profit_UserGroups"
-    ],
+    "etl.Data_processor": {
+        "description": "ETL data verwerking, JSON payloads en bronbestanden",
+        "columns": [
+            "id",
+            "table_target",
+            "payload",
+            "insert_date",
+            "source_sys",
+            "json_path"
+        ]
+    },
 
-    "employee_details": [
-        "afas.Bring_Medewerker_Functie",
-        "afas.Bring_Medewerker_Contract",
-        "afas.Bring_Medewerker_Salaris",
-        "afas.Bring_Verzuim",
-        "afas.Bring_LeaveTypes",
-        "afas.Profit_LeaveBalance"
-    ],
+    "etl.EndpointConfig": {
+        "description": "ETL endpoint configuratie, synchronisaties, query instellingen en imports",
+        "columns": [
+            "Id",
+            "SqlProfile",
+            "EndpointName",
+            "UniqueIdentifier",
+            "IsEnabled",
+            "UseDefaultParams",
+            "SchemaProbeParamsJson",
+            "BaseQueryParamsJson",
+            "Take",
+            "ProcessQueueNow",
+            "EnvironmentCode",
+            "EnvironmentType",
+            "SortOrder",
+            "CreatedAt",
+            "UpdatedAt",
+            "UniqueKeyJson",
+            "DefaultJsonPath",
+            "System",
+            "Frequency",
+            "OracleQuery"
+        ]
+    },
 
-    "finance": [
-        "afas.Bring_FinancieleMutaties_ESJ",
-        "afas.Bring_Debtor_Invoices",
-        "afas.Profit_Debtor",
-        "afas.Profit_Journals"
-    ],
+    "_logs.EtRunLog": {
+        "description": "ETL runs, endpoint uitvoeringen, fouten, waarschuwingen en logging gebeurtenissen",
+        "columns": [
+            "id",
+            "profile",
+            "endpoint",
+            "environment",
+            "event_time",
+            "level",
+            "message",
+            "details"
+        ]
+    },
 
-    "organization": [
-        "afas.Bring_KNOrganisation"
-    ],
+    "_logs.ProcessingLog": {
+        "description": "Verwerking van ETL imports, statussen, fouten en verwerkte records",
+        "columns": [
+            "id",
+            "data_processor_id",
+            "table_target",
+            "status",
+            "start_time",
+            "end_time",
+            "rows_inserted",
+            "column_count",
+            "error_message",
+            "logged_at"
+        ]
+    },
 
-    "workflow": [
-        "afas.Bring_workflow_log"
-    ],
+    "afas.Bring_Activakaart": {
+        "description": "Activa, vaste activa, afschrijvingen, boekwaarden en financiële activa administratie",
+        "columns": [
+            "Nummer_journaalpost",
+            "Activacode",
+            "Naam_actief",
+            "Grootboekrekening",
+            "TypeRekeningNL",
+            "Boekjaar_financieel",
+            "Periode_financieel",
+            "Bedrag",
+            "Periode_activa",
+            "Boekjaar_activa",
+            "Type_item",
+            "Afschrijving_initieel",
+            "Boekwinst_vorig_actief",
+            "Boekwinst_verlies",
+            "Boekwaarde"
+        ]
+    },
 
-    "logs": [
-        "_logs.ProcesssingLog",
-        "_logs.EtlRunLog"
-    ],
+    "afas.Bring_Debtor_Invoices": {
+        "description": "Debiteurfacturen, openstaande facturen, vervaldatums, saldo's en klantfacturatie",
+        "columns": [
+            "UnitId",
+            "DebtorId",
+            "InvoiceNr",
+            "NookPieceDate",
+            "ExpDate",
+            "CurrencyId",
+            "AmtInvoice",
+            "AmtInvoiceCurr",
+            "Balance",
+            "BalanceCurr",
+            "Description",
+            "Datum_gewijzigd",
+            "Gewijzigd_door",
+            "Omschrijving"
+        ]
+    },
 
-    "system": [
-        "_etl.APITokens",
-        "_etl.Data_processor",
-        "_etl.EndpointConfig"
-    ],
+    "afas.Bring_Employees": {
+        "description": "Medewerkers, persoonsgegevens, contactgegevens, functies, contractinformatie en organisatorische gegevens",
+        "columns": [
+            "EmployeeId",
+            "PersonId",
+            "EmployerId",
+            "BSN",
+            "BirthName",
+            "Initials",
+            "PrefixBirthName",
+            "DateOfBirth",
+            "Gender",
+            "MaritalStatus",
+            "PrefixPartner",
+            "BirthNamePartner",
+            "NameUse",
+            "Mobile",
+            "Phone",
+            "Street",
+            "HouseNumber",
+            "AddNumber",
+            "ZIPCode",
+            "City",
+            "Country",
+            "EmploymentStart",
+            "EmploymentEnd",
+            "HourPerWeek",
+            "EmploymentType",
+            "EmploymentTypeDesc",
+            "FTE",
+            "OrgUnit",
+            "OrgUnitDesc",
+            "FunctionId",
+            "FunctionDesc",
+            "DateDeceased",
+            "Mail",
+            "FirstName",
+            "Indienst_arbeidsverhouding"
+        ]
+    },
 
-    "LSP": [
-        "dbo.Tally",
-        "LSP_NL.bcnl_edirefs",
-        "LSP_NL.peppol_lijn12"
+    "afas.Bring_FinancieleMutaties_ESJ": {
+        "description": "Financiële mutaties, grootboekboekingen, debiteuren, crediteuren, projecten, journaalposten en financiële administratie",
+        "columns": [
+            "Naam_administratie",
+            "UnitId",
+            "Administratie",
+            "EntryDate",
+            "AccountNo",
+            "Grootboekrekeningnr",
+            "AmtDebit",
+            "AmtCredit",
+            "Saldo",
+            "Valuta",
+            "Koers",
+            "Valutabedrag_debet",
+            "Valutabedrag_credit",
+            "Description",
+            "Bron_journaalpost",
+            "EntryNo",
+            "SeqNo",
+            "Volgnummer_journaalpost",
+            "Year",
+            "Period",
+            "VoucherDate",
+            "InvoiceId",
+            "Code_dagboek",
+            "JournalId",
+            "Dagboekomschrijving",
+            "VoucherNo",
+            "Nummer_verplichting",
+            "Kenmerk_rekening",
+            "Type_rekening_nummer_debiteur_crediteur",
+            "Debiteur_crediteur",
+            "Subrekening_crediteur",
+            "Subrekening_debiteur",
+            "Code_verbijzonderingsas_1",
+            "Code_verbijzonderingsas_2",
+            "Project",
+            "ProjectOmschrijving",
+            "Type_projectboeking",
+            "Toegevoegd_door",
+            "Datum_toegevoegd",
+            "Gewijzigd_door",
+            "Datum_gewijzigd",
+            "VatCode",
+            "Transitorische_post",
+            "Admin_rek_courantboeking",
+            "Status_wijziging",
+            "DebCredNaam",
+            "Verzamelen_op",
+            "Hoofdverdichting",
+            "Subverdichting",
+            "Type_grootboekrekening",
+            "Omschrijving",
+            "Debiteur_crediteur_2"
+        ]
+    },
+
+    "afas.Bring_KnOrganisation": {
+        "description": "Organisaties, klanten, leveranciers, contactgegevens, administratie en accountmanagement",
+        "columns": [
+            "BcCo",
+            "Type",
+            "SearchName",
+            "Name",
+            "Land",
+            "TelWork",
+            "MailWork",
+            "Homepage",
+            "Note",
+            "ChOfCommNr",
+            "Straat",
+            "Huisnummer",
+            "toev_huisnr",
+            "Postcode",
+            "Woonplaats",
+            "Accountmanager",
+            "Debiteur",
+            "Crediteur",
+            "Administratie",
+            "Klant_productgroepen",
+            "Bron",
+            "Debiteurnummer"
+        ]
+    },
+
+    "afas.Bring_LeaveTypes": {
+        "description": "Verlofsoorten, verlofcodes en omschrijvingen van verloftypes",
+        "columns": [
+            "Leavetype",
+            "LeaveTypeDesc"
+        ]
+    },
+        "afas.Bring_Medewerker_Contract": {
+        "description": "Contractgegevens, dienstverbanden, werkgevers, CAO, arbeidsvoorwaarden en contracthistorie van medewerkers",
+        "columns": [
+            "Medewerker",
+            "Volgnummer_dienstverband",
+            "Begindatum_contract",
+            "Einddatum_contract",
+            "Werkgever",
+            "Cao",
+            "Arbeidsvoorwaarde_code",
+            "Dienstbetrekking",
+            "Datum_in_dienst",
+            "Datum_uit_dienst",
+            "Type_contract",
+            "Einde_proeftijd_per",
+            "Laatste_werkdag",
+            "Soort_medewerker",
+            "Onbepaalde_tijd",
+            "Schriftelijke_arbeidsovereenkomst",
+            "Aangemaakt_op",
+            "Toegevoegd_door",
+            "Gewijzigd_op",
+            "Gewijzigd_door"
+        ]
+    },
+
+    "afas.Bring_Medewerker_Functie": {
+    "description": "Functies, functiehistorie, organisatorische eenheden, kostenplaatsen en functiewijzigingen van medewerkers",
+    "columns": [
+        "Medewerker",
+        "Volgnummer_dienstverband",
+        "Begindatum_contract",
+        "Einddatum_contract",
+        "Werkgever",
+        "Cao",
+        "Arbeidsvoorwaarde_code",
+        "Dienstbetrekking",
+        "Datum_in_dienst",
+        "Datum_uit_dienst",
+        "Type_contract",
+        "Einde_proeftijd_per",
+        "Laatste_werkdag",
+        "Onbepaalde_tijd",
+        "Schriftelijke_arbeidsovereenkomst",
+        "Aangemaakt_op",
+        "Toegevoegd_door",
+        "Gewijzigd_op",
+        "Gewijzigd_door"
     ]
+},
+
+"afas.Bring_VasteActiva": {
+    "description": "Vaste activa, aanschafwaarden, afschrijvingen, restwaardes en activa-administratie",
+    "columns": [
+        "Administratie",
+        "Administratie_3",
+        "Activacode",
+        "VolgNr_Comm",
+        "VolgNr_Fisc",
+        "Vaste_activagroep",
+        "Omschrijving",
+        "Status_actief",
+        "Naam_actief",
+        "Aanschafdatum",
+        "Aanschafwaarde",
+        "Additionele_kosten",
+        "Begindatum_afschrijving_comm",
+        "Einddatum_afschrijving_comm",
+        "Restwaarde_comm",
+        "Afschrijvingstermijn_comm",
+        "Begindatum_afschrijving_fisc",
+        "Einddatum_afschrijving_fisc",
+        "Restwaarde_fisc",
+        "Afschrijvingstermijn_fisc"
+    ]
+},
+    
+"afas.Bring_Verzuim": {
+    "description": "Verzuim, ziekte, aanwezigheid, afwezigheid, vervanging en verlofstatus van medewerkers",
+    "columns": [
+        "GUID",
+        "Medewerker",
+        "Naam",
+        "Aanwezigheid",
+        "Aanwezigheid_AT",
+        "Omschrijving",
+        "Gewijzigd_op",
+        "StartDatum",
+        "Einddatum",
+        "Werkgever",
+        "NaamVervanger"
+    ]
+},
+
+"afas.Bring_workflow_log": {
+    "description": "Workflow acties, taken, gebruikersacties, doelgebruikers en workflow historie",
+    "columns": [
+        "end_date",
+        "user_description",
+        "action_description",
+        "task_description",
+        "duration",
+        "line_id",
+        "subject_id",
+        "user",
+        "target_user",
+        "target_user_description",
+        "user_person_id",
+        "target_user_person_id",
+        "user_image_id",
+        "target_user_image_id"
+    ]
+},
+
+"afas.Profit_Debtor": {
+    "description": "Debiteuren, klanten, betaalgegevens, contactgegevens, kredietlimieten en facturatie-informatie",
+    "columns": [
+        "DebtorId",
+        "DebtorName",
+        "BcCo",
+        "SearchName",
+        "AdressLine1",
+        "AdressLine3",
+        "AdressLine4",
+        "TelNr",
+        "Email",
+        "IBAN",
+        "VatNr",
+        "ChOfCommNr",
+        "CollectAccount",
+        "PayCon",
+        "VatDuty",
+        "Blocked",
+        "CreditLimit",
+        "CurrencyId",
+        "AutoPayment",
+        "CreateDate",
+        "ModifiedDate"
+    ]
+},
+
+
+
+"afas.Profit_Users": {
+    "description": """
+Gebruikersaccounts en systeemtoegang.
+
+Gebruik ALLEEN voor:
+- UserId
+- UPN
+- login
+- account
+- InSite
+- OutSite
+- Connector
+- geblokkeerde gebruikers
+
+Gebruik NOOIT voor:
+- BSN
+- telefoon
+- mobiel
+- email van medewerkers
+- adres
+- woonplaats
+- geboortedatum
+- medewerkergegevens
+"""},
+
+
+"afas.Profit_Employers": {
+    "description": "Werkgevers, organisaties, organisatorische eenheden en financiële dimensies",
+    "columns": [
+        "EmployerId",
+        "Name",
+        "OrganisationId",
+        "AddressLine1",
+        "AddressLine3",
+        "AddressLine4",
+        "DimAx1",
+        "DimAx2",
+        "DimAx3",
+        "DimAx4",
+        "DimAx5",
+        "UnitId"
+    ]
+},
+
+"afas.Profit_Journals": {
+    "description": "Dagboeken, journaaltypen, financiële journalen en blokkeringen",
+    "columns": [
+        "UnitId",
+        "JournalId",
+        "Description",
+        "JournalType",
+        "Blocked"
+    ]
+},
+
+"afas.Profit_LeaveBalance": {
+    "description": "Verlofsaldo, vakantiedagen, opgenomen verlof en resterende verlofrechten van medewerkers",
+    "columns": [
+        "EmployeeId",
+        "EmployerId",
+        "DvId",
+        "Leavetype",
+        "Year",
+        "Period",
+        "Entitlement",
+        "ExtraEntitlement",
+        "StartBalance",
+        "Taken",
+        "Balance"
+    ]
+},
+
+"afas.Profit_Leaves": {
+    "description": "Verlofregistraties, verlofaanvragen, verlofuren, verlofperiodes en verlofredenen van medewerkers",
+    "columns": [
+        "LeaveId",
+        "EmployeeId",
+        "Name",
+        "BSN",
+        "Export",
+        "Hours",
+        "StartDate",
+        "EndDate",
+        "DvId",
+        "ModifiedDate",
+        "LeaveCode",
+        "LeaveDescr",
+        "ReasonCode",
+        "ReasonDescr"
+    ]
+},
+
+"afas.Profit_UserGroups": {
+    "description": "Gebruikersgroepen, groepslidmaatschappen en koppelingen tussen gebruikers en groepen",
+    "columns": [
+        "GroupId",
+        "Decription",
+        "UserId"
+    ]
+},
+
+
+"dbo.Tally": {
+    "description": "Technische hulpartabel met nummerreeksen voor tellingen, loops en datageneratie",
+    "columns": [
+        "n"
+    ]
+},
+
+"LSP_NL.bcnl_bree_searchnames": {
+    "description": "Logistieke zoekgegevens voor plaatsen, postcodes, landen en zoeknamen",
+    "columns": [
+        "zoek",
+        "postka",
+        "plaats",
+        "land"
+    ]
+},
+
+"LSP_NL.bcnl_edirefs": {
+    "description": "EDI referenties, logistieke dossiernummers en koppelingen tussen EDI en PEMR gegevens",
+    "columns": [
+        "dosvlg",
+        "tsEDIr",
+        "pemr"
+    ]
+},
+
+"LSP_NL.peppol_lijn12": {
+    "description": "Peppol logistieke gegevens, relatienummers, dossiernummers, rolnummers en PEMR koppelingen",
+    "columns": [
+        "zoek",
+        "relnr",
+        "dosvlg",
+        "tsroln",
+        "pemr",
+        "ID"
+    ]
+},
+
 }
-
-
-# =========================================================
-# DATABASE SCHEMA BUILDER
-# =========================================================
-
-def get_database_schema(engine):
-
-    schema_text = ""
-
-    with engine.connect() as conn:
-
-        for group_name, tables in TABLE_GROUPS.items():
-
-            schema_text += f"\n\n==============================\n"
-            schema_text += f"GROUP: {group_name}\n"
-            schema_text += f"==============================\n"
-
-            for table in tables:
-
-                try:
-
-                    # -----------------------------
-                    # SPLIT SCHEMA + TABLE
-                    # -----------------------------
-
-                    if "." in table:
-                        schema_name, table_name = table.split(".", 1)
-                    else:
-                        schema_name = "dbo"
-                        table_name = table
-
-                    schema_text += f"\n\nTable: {table}\n"
-                    schema_text += "-" * 50 + "\n"
-
-                    # -----------------------------
-                    # GET COLUMNS
-                    # -----------------------------
-
-                    column_query = text("""
-                        SELECT 
-                            COLUMN_NAME,
-                            DATA_TYPE,
-                            IS_NULLABLE
-                        FROM INFORMATION_SCHEMA.COLUMNS
-                        WHERE TABLE_SCHEMA = :schema
-                        AND TABLE_NAME = :table
-                        ORDER BY ORDINAL_POSITION
-                    """)
-
-                    columns = conn.execute(
-                        column_query,
-                        {
-                            "schema": schema_name,
-                            "table": table_name
-                        }
-                    ).fetchall()
-
-                    if not columns:
-
-                        schema_text += "No columns found.\n"
-                        continue
-
-                    # -----------------------------
-                    # WRITE COLUMNS
-                    # -----------------------------
-
-                    for col in columns:
-
-                        nullable = "NULL" if col.IS_NULLABLE == "YES" else "NOT NULL"
-
-                        schema_text += (
-                            f"- {col.COLUMN_NAME} "
-                            f"({col.DATA_TYPE}, {nullable})\n"
-                        )
-
-                    # -----------------------------
-                    # SAMPLE DATA
-                    # -----------------------------
-
-                    try:
-
-                        sample_query = text(f"""
-                            SELECT TOP 3 *
-                            FROM [{schema_name}].[{table_name}]
-                        """)
-
-                        sample_rows = conn.execute(sample_query).fetchall()
-
-                        if sample_rows:
-
-                            schema_text += "\nSample rows:\n"
-
-                            for row in sample_rows:
-
-                                row_dict = dict(row._mapping)
-
-                                cleaned_row = {}
-
-                                for key, value in row_dict.items():
-
-                                    value = str(value)
-
-                                    if len(value) > 50:
-                                        value = value[:50] + "..."
-
-                                    cleaned_row[key] = value
-
-                                schema_text += f"{cleaned_row}\n"
-
-                    except Exception as sample_error:
-
-                        schema_text += (
-                            f"\nCould not load sample data: "
-                            f"{sample_error}\n"
-                        )
-
-                except Exception as table_error:
-
-                    schema_text += (
-                        f"\nERROR loading table {table}: "
-                        f"{table_error}\n"
-                    )
-
-    return schema_text
-
-
-# =========================================================
-# LOAD DATABASE SCHEMA ON STARTUP
-# =========================================================
-
-DATABASE_SCHEMA = get_database_schema(engine)
-
-
-# =========================================================
-# SYSTEM PROMPT
-# =========================================================
-
-SYSTEM_PROMPT = f"""
-You are an advanced SQL Server AI assistant.
-
-You have access to the following database schema:
-
-{DATABASE_SCHEMA}
-
-Rules:
-- Only use existing tables and columns
-- Never invent columns or tables
-- Use valid SQL Server syntax
-- Use TOP instead of LIMIT
-- Use readable JOINs
-- Prefer exact column names
-- Return only valid SQL when generating queries
-- If information is missing, say so
-- Be careful with DELETE or UPDATE statements
-- Never generate destructive SQL unless explicitly requested
-"""
-
-
-# =========================================================
-# BUILD FINAL PROMPT
-# =========================================================
-
-def build_prompt(question: str):
-
-    return f"""
-User question:
-{question}
-"""
-
-
-# =========================================================
-# ASK OLLAMA
-# =========================================================
-
-def ask_ollama(llm, question: str):
-
-    user_prompt = build_prompt(question)
-
-    response = llm.invoke([
-        ("system", SYSTEM_PROMPT),
-        ("human", user_prompt)
-    ])
-
-    return response.content

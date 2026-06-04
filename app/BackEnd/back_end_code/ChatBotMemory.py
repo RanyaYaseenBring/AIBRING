@@ -42,8 +42,8 @@ def save_chat_memory(
 
     data[username].append({
 
-        "user": user_message,
-
+        "user": username,
+        "message": user_message,
         "bot": bot_answer
 
     })
