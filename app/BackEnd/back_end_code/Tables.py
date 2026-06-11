@@ -450,8 +450,6 @@ afas.Bring_Medewerker_Contract.Medewerker = afas.Bring_Employees.EmployeeId
     ]
 },
 
-
-
 "afas.Profit_Users": {
     "description": """
 Gebruikersaccounts en systeemtoegang.
@@ -476,7 +474,6 @@ Gebruik NOOIT voor:
 - geboortedatum
 - medewerkergegevens
 """},
-
 
 "afas.Profit_Employers": {
     "description": "Werkgevers, organisaties, organisatorische eenheden en financiële dimensies",
