@@ -2,7 +2,6 @@ from sqlalchemy import text
 
 session_states = {}
 
-
 # =====================================================
 # STATE MANAGEMENT
 # =====================================================
@@ -32,7 +31,6 @@ def get_user_state(session_id):
 def reset_state(session_id):
 
     session_states[session_id] = create_tracking_state()
-
 
 # =====================================================
 # AI REPLY
@@ -67,7 +65,6 @@ TASK:
     except Exception:
 
         return "Something went wrong."
-
 
 # =====================================================
 # LANGUAGE DETECTION
@@ -105,7 +102,6 @@ MESSAGE:
     except:
 
         return "english"
-
 
 # =====================================================
 # INTENT CLASSIFIER
@@ -178,7 +174,6 @@ USER MESSAGE:
 
         return "unknown"
 
-
 # =====================================================
 # SHOULD USE TRACKING
 # =====================================================
@@ -199,7 +194,6 @@ def should_use_tracking(msg, session_id, llm):
     intent = classify_tracking_intent(msg, llm)
 
     return intent == "tracking"
-
 
 # =====================================================
 # FETCH TRACKING DATA
@@ -301,7 +295,6 @@ def fetch_tracking_data(
 
         return row
 
-
 # =====================================================
 # HANDLE TRACKING
 # =====================================================
@@ -316,7 +309,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
     msg = msg.strip()
 
     language = user_state["language"]
-
 
     # =====================================================
     # CONTINUE FLOW
@@ -362,14 +354,12 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
         user_state["waiting_for_zipcode_question"] = False
 
-
         # USER HAS ZIPCODE
         if intent == "yes":
 
             user_state["waiting_for_zipcode"] = True
 
             return "Please provide the zipcode."
-
 
         # USER HAS NO ZIPCODE
         try:
@@ -400,8 +390,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
         )
 
         return response
-
-
     # =====================================================
     # ZIPCODE VALIDATION FLOW
     # =====================================================
@@ -480,7 +468,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
         return response
 
-
     # =====================================================
     # TRACKING NUMBER FLOW
     # =====================================================
@@ -526,7 +513,6 @@ def handle_tracking(msg, engine_track, llm, session_id):
 
         return "Do you have the recipient's zipcode? Yes or no."
 
-
     # =====================================================
     # START TRACKING FLOW
     # =====================================================
@@ -546,5 +532,4 @@ def handle_tracking(msg, engine_track, llm, session_id):
         user_state["waiting_for_tracking_number"] = True
 
         return "Please provide the tracking number."
-
     return None

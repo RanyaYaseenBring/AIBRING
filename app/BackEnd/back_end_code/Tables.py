@@ -125,46 +125,85 @@ SCHEMA = {
         ]
     },
 
-    "afas.Bring_Employees": {
-        "description": "Medewerkers, persoonsgegevens, contactgegevens, functies, contractinformatie en organisatorische gegevens",
-        "columns": [
-            "EmployeeId",
-            "PersonId",
-            "EmployerId",
-            "BSN",
-            "BirthName",
-            "Initials",
-            "PrefixBirthName",
-            "DateOfBirth",
-            "Gender",
-            "MaritalStatus",
-            "PrefixPartner",
-            "BirthNamePartner",
-            "NameUse",
-            "Mobile",
-            "Phone",
-            "Street",
-            "HouseNumber",
-            "AddNumber",
-            "ZIPCode",
-            "City",
-            "Country",
-            "EmploymentStart",
-            "EmploymentEnd",
-            "HourPerWeek",
-            "EmploymentType",
-            "EmploymentTypeDesc",
-            "FTE",
-            "OrgUnit",
-            "OrgUnitDesc",
-            "FunctionId",
-            "FunctionDesc",
-            "DateDeceased",
-            "Mail",
-            "FirstName",
-            "Indienst_arbeidsverhouding"
-        ]
-    },
+   "afas.Bring_Employees": {
+    "description": """
+HOOFDTABEL VOOR MEDEWERKERS EN PERSONEEL.
+
+Gebruik deze tabel voor:
+- medewerkers
+- personeel
+- werknemers
+- personen
+- persoonsgegevens
+- contactgegevens
+- telefoonnummer
+- mobiel nummer
+- email adres
+- geboortedatum
+- leeftijd
+- functie
+- afdeling
+- contractinformatie
+
+Gebruik deze tabel voor adresgegevens van medewerkers:
+- adres
+- straat
+- huisnummer
+- toevoeging
+- postcode
+- woonplaats
+- land
+
+BELANGRIJK:
+Wanneer een vraag over een persoon, medewerker of werknemer gaat,
+gebruik deze tabel als eerste keuze.
+
+Adresgegevens bestaan uit:
+Street
+HouseNumber
+AddNumber
+ZIPCode
+City
+Country
+""",
+    "columns": [
+        "EmployeeId",
+        "PersonId",
+        "EmployerId",
+        "BSN",
+        "BirthName",
+        "Initials",
+        "PrefixBirthName",
+        "DateOfBirth",
+        "Gender",
+        "MaritalStatus",
+        "PrefixPartner",
+        "BirthNamePartner",
+        "NameUse",
+        "Mobile",
+        "Phone",
+        "Street",
+        "HouseNumber",
+        "AddNumber",
+        "ZIPCode",
+        "City",
+        "Country",
+        "EmploymentStart",
+        "EmploymentEnd",
+        "HourPerWeek",
+        "EmploymentType",
+        "EmploymentTypeDesc",
+        "FTE",
+        "OrgUnit",
+        "OrgUnitDesc",
+        "FunctionId",
+        "FunctionDesc",
+        "DateDeceased",
+        "Mail",
+        "FirstName",
+        "Indienst_arbeidsverhouding"
+    ]
+},
 
     "afas.Bring_FinancieleMutaties_ESJ": {
         "description": "Financiële mutaties, grootboekboekingen, debiteuren, crediteuren, projecten, journaalposten en financiële administratie",
@@ -259,31 +298,42 @@ SCHEMA = {
             "LeaveTypeDesc"
         ]
     },
-        "afas.Bring_Medewerker_Contract": {
-        "description": "Contractgegevens, dienstverbanden, werkgevers, CAO, arbeidsvoorwaarden en contracthistorie van medewerkers",
-        "columns": [
-            "Medewerker",
-            "Volgnummer_dienstverband",
-            "Begindatum_contract",
-            "Einddatum_contract",
-            "Werkgever",
-            "Cao",
-            "Arbeidsvoorwaarde_code",
-            "Dienstbetrekking",
-            "Datum_in_dienst",
-            "Datum_uit_dienst",
-            "Type_contract",
-            "Einde_proeftijd_per",
-            "Laatste_werkdag",
-            "Soort_medewerker",
-            "Onbepaalde_tijd",
-            "Schriftelijke_arbeidsovereenkomst",
-            "Aangemaakt_op",
-            "Toegevoegd_door",
-            "Gewijzigd_op",
-            "Gewijzigd_door"
-        ]
-    },
+"afas.Bring_Medewerker_Contract": {
+    "description": """
+Contractgegevens, dienstverbanden, werkgevers, CAO, arbeidsvoorwaarden en contracthistorie van medewerkers.
+
+BELANGRIJK:
+De kolom Medewerker is GEEN naam.
+Medewerker verwijst naar afas.Bring_Employees.EmployeeId.
+
+Gebruik bij vragen met een persoonsnaam altijd een JOIN met afas.Bring_Employees.
+
+RELATIE:
+afas.Bring_Medewerker_Contract.Medewerker = afas.Bring_Employees.EmployeeId
+""",
+    "columns": [
+        "Medewerker",
+        "Volgnummer_dienstverband",
+        "Begindatum_contract",
+        "Einddatum_contract",
+        "Werkgever",
+        "Cao",
+        "Arbeidsvoorwaarde_code",
+        "Dienstbetrekking",
+        "Datum_in_dienst",
+        "Datum_uit_dienst",
+        "Type_contract",
+        "Einde_proeftijd_per",
+        "Laatste_werkdag",
+        "Soort_medewerker",
+        "Onbepaalde_tijd",
+        "Schriftelijke_arbeidsovereenkomst",
+        "Aangemaakt_op",
+        "Toegevoegd_door",
+        "Gewijzigd_op",
+        "Gewijzigd_door"
+    ]
+},
 
     "afas.Bring_Medewerker_Functie": {
     "description": "Functies, functiehistorie, organisatorische eenheden, kostenplaatsen en functiewijzigingen van medewerkers",
@@ -374,7 +424,7 @@ SCHEMA = {
 },
 
 "afas.Profit_Debtor": {
-    "description": "Debiteuren, klanten, betaalgegevens, contactgegevens, kredietlimieten en facturatie-informatie",
+    "description": "Debiteuren, klanten, betaalgegevens, kredietlimieten en facturatie-informatie",
     "columns": [
         "DebtorId",
         "DebtorName",
