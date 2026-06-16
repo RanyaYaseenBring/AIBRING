@@ -52,7 +52,6 @@ def make_engine(server, database, username, password):
         pool_pre_ping=True
     )
 
-
 # =========================
 # DATABASES
 # =========================
@@ -125,7 +124,6 @@ def get_user_state(session_id: str):
 def reset_state(session_id: str):
     chat_sessions[session_id] = create_empty_state()
 
-
 # =========================
 # SCHEMA PROMPT
 # =========================
@@ -150,7 +148,6 @@ KOLOMMEN:
 """
 
     return schema_text
-
 
 def clean_sql_response(response: str):
     response = response.strip()
@@ -208,11 +205,9 @@ def validate_sql(sql_query: str):
 
     return None
 
-
 # =========================
 # INTERNAL SQL
 # =========================
-
 def handle_internal_question(question: str):
     schema_text = build_schema_text()
 
@@ -241,6 +236,7 @@ BELANGRIJKE REGELS:
 - Geef uitsluitend SQL terug.
 - Geen markdown.
 - Geen uitleg.
+- alleen admins kunnen vragen om het bsn nummer
 
 DATABASE SCHEMA:
 
@@ -353,6 +349,7 @@ Maak geen extra informatie erbij.
     final_answer = llm.invoke(answer_prompt).content.strip()
 
     return final_answer
+    
 
 def answer_question(question: str, session_id: str):
     msg = question.strip()
@@ -364,7 +361,7 @@ def answer_question(question: str, session_id: str):
     if msg_lower in ["algemene vraag", "algemene_vraag"]:
         state["mode"] = "general"
         return "Hallo! Hoe kan ik u vandaag helpen?"
-
+    
     # Track & trace starten
     if msg_lower in ["track & trace", "track_trace"]:
         state["mode"] = "tracking"
@@ -377,9 +374,33 @@ def answer_question(question: str, session_id: str):
         )
 
     # Interne modus starten
-    if msg_lower in ["interne vraag", "intern"]:
-        state["mode"] = "internal"
-        return "Interne modus geactiveerd. Stel uw vraag."
+        # General AI actief
+    if state["mode"] == "general":
+        if "history" not in state:
+            state["history"] = []
+
+        state["history"].append({
+            "role": "user",
+            "content": msg
+        })
+
+        recent_history = state["history"][-20:]
+
+        conversation = ""
+
+        for item in recent_history:
+            conversation += f"{item['role']}: {item['content']}\n"
+
+        ai_message = llm.invoke(conversation).content.strip()
+
+        state["history"].append({
+            "role": "assistant",
+            "content": ai_message
+        })
+
+        state["history"] = state["history"][-20:]
+
+        return ai_message
 
     # Tracking actief
     if state["mode"] == "tracking":
@@ -400,9 +421,7 @@ def answer_question(question: str, session_id: str):
             print(str(e))
             return f"SQL fout: {str(e)}"
 
-    # Algemene vraag
-    return "Ik sta in algemene modus. Kies bijvoorbeeld 'track & trace' of 'interne vraag'."
-
+ 
 
 # =========================
 # REQUEST MODELS
@@ -417,7 +436,6 @@ class LoginReq(BaseModel):
     email: str
     password: str
 
-
 # =========================
 # ROUTES
 # =========================
@@ -425,7 +443,6 @@ class LoginReq(BaseModel):
 @app.post("/chat")
 async def chat(req: ChatReq):
     session_id = req.session_id or "default-session"
-
     try:
         ans = await run_in_threadpool(
             lambda: answer_question(
@@ -451,7 +468,6 @@ async def chat(req: ChatReq):
         "session_id": session_id
     }
 
-
 @app.post("/login")
 def login(req: LoginReq):
     print(req.email)
@@ -460,11 +476,6 @@ def login(req: LoginReq):
     return {
         "success": True
     }
-
-
-# =========================
-# START SERVER
-# =========================
 
 if __name__ == "__main__":
     import uvicorn
