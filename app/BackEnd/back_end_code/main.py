@@ -349,7 +349,6 @@ Maak geen extra informatie erbij.
     final_answer = llm.invoke(answer_prompt).content.strip()
 
     return final_answer
-    
 
 def answer_question(question: str, session_id: str):
     msg = question.strip()
@@ -358,10 +357,12 @@ def answer_question(question: str, session_id: str):
     state = get_user_state(session_id)
 
     # Algemene modus starten
+    
     if msg_lower in ["algemene vraag", "algemene_vraag"]:
         state["mode"] = "general"
+        state["history"] = []
         return "Hallo! Hoe kan ik u vandaag helpen?"
-    
+
     # Track & trace starten
     if msg_lower in ["track & trace", "track_trace"]:
         state["mode"] = "tracking"
@@ -374,11 +375,36 @@ def answer_question(question: str, session_id: str):
         )
 
     # Interne modus starten
-        # General AI actief
-    if state["mode"] == "general":
-        if "history" not in state:
-            state["history"] = []
+    if msg_lower in ["interne vraag", "intern"]:
+        state["mode"] = "internal"
+        return "Interne modus geactiveerd. Stel uw vraag."
 
+    # Tracking actief
+    if state["mode"] == "tracking":
+        return handle_tracking(
+            msg,
+            engine_track,
+            llm,
+            session_id
+        )
+
+    # Internal SQL actief
+    if state["mode"] == "internal":
+        try:
+            return handle_internal_question(msg)
+
+        except Exception as e:
+            print("========== SQL ERROR ==========")
+            print(str(e))
+            return f"SQL fout: {str(e)}"
+
+    if state["mode"] == "internal":
+        try:
+            return handle_internal_question(msg)
+        except Exception as e:
+            return f"SQL fout: {str(e)}"
+
+    if state["mode"] == "general":
         state["history"].append({
             "role": "user",
             "content": msg
@@ -402,27 +428,6 @@ def answer_question(question: str, session_id: str):
 
         return ai_message
 
-    # Tracking actief
-    if state["mode"] == "tracking":
-        return handle_tracking(
-            msg,
-            engine_track,
-            llm,
-            session_id
-        )
-
-    # Internal SQL actief
-    if state["mode"] == "internal":
-        try:
-            return handle_internal_question(msg)
-
-        except Exception as e:
-            print("========== SQL ERROR ==========")
-            print(str(e))
-            return f"SQL fout: {str(e)}"
-
- 
-
 # =========================
 # REQUEST MODELS
 # =========================
@@ -443,6 +448,7 @@ class LoginReq(BaseModel):
 @app.post("/chat")
 async def chat(req: ChatReq):
     session_id = req.session_id or "default-session"
+
     try:
         ans = await run_in_threadpool(
             lambda: answer_question(
