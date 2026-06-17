@@ -284,6 +284,8 @@ SELECT TOP 100
 FROM afas.Profit_LeaveBalance
 WHERE EmployeeId = '123'
 
+
+
 GEBRUIKERSVRAAG:
 {question}
 
@@ -299,9 +301,6 @@ SQL:
     validation_error = validate_sql(sql_query)
 
     print("STEP 4")
-    with engine_emp.connect() as conn:
-
-        raw_response = llm.invoke(sql_prompt).content.strip()
 
     print("========== RAW SQL ==========")
     print(raw_response)
@@ -310,6 +309,25 @@ SQL:
 
     if not sql_query:
         return "Ik kon geen geldige SQL genereren."
+
+    print("========== CLEAN SQL ==========")
+    print(sql_query)
+
+    validation_error = validate_sql(sql_query)
+
+    if validation_error:
+        return validation_error
+
+    with engine_emp.connect() as conn:
+        result = conn.execute(text(sql_query))
+        rows = result.mappings().fetchall()
+        print("========== RAW SQL ==========")
+        print(raw_response)
+
+        sql_query = clean_sql_response(raw_response)
+
+        if not sql_query:
+            return "Ik kon geen geldige SQL genereren."
 
     print("========== CLEAN SQL ==========")
     print(sql_query)
@@ -435,7 +453,6 @@ def answer_question(question: str, session_id: str):
 class ChatReq(BaseModel):
     message: str
     session_id: str | None = None
-
 
 class LoginReq(BaseModel):
     email: str

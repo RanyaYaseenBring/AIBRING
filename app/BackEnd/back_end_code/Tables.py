@@ -387,7 +387,45 @@ afas.Bring_Medewerker_Contract.Medewerker = afas.Bring_Employees.EmployeeId
 },
     
 "afas.Bring_Verzuim": {
-    "description": "Verzuim, ziekte, aanwezigheid, afwezigheid, vervanging en verlofstatus van medewerkers",
+    "description": """
+BELANGRIJKE REGELS VOOR afas.Bring_Verzuim
+
+Aanwezigheid bevat waarden zoals:
+0.0
+57.5
+82.5
+100.0
+
+Interpretatie:
+- Aanwezigheid > 0 = aanwezig
+- Aanwezigheid = 0 = afwezig
+
+Gebruik altijd:
+
+CAST(Aanwezigheid AS FLOAT)
+
+Voorbeelden:
+
+Vraag:
+Welke medewerkers zijn aanwezig?
+
+SQL:
+SELECT TOP 100
+    Naam,
+    Aanwezigheid
+FROM afas.Bring_Verzuim
+WHERE CAST(Aanwezigheid AS FLOAT) > 0
+
+Vraag:
+Welke medewerkers zijn afwezig?
+
+SQL:
+SELECT TOP 100
+    Naam,
+    Aanwezigheid
+FROM afas.Bring_Verzuim
+WHERE CAST(Aanwezigheid AS FLOAT) = 0
+""",
     "columns": [
         "GUID",
         "Medewerker",
