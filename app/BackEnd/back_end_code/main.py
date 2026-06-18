@@ -31,13 +31,21 @@ chat_sessions = {}
 # CORS
 # =========================
 
+# Definieer de exacte URL's die toegang krijgen tot je API
+origins = [
+    "http://localhost:3000",  # Standaard React poort
+    "http://localhost:5173",  # Standaard Vite + React poort
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,  # Gebruik de lijst in plaats van "*"
+    allow_credentials=True,  # Dit is vaak nodig voor inlogsessies
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # =========================
 # DATABASE CONNECTION
@@ -485,7 +493,9 @@ class DeleteUserReq(BaseModel):
 # =========================
 # ROUTES
 # =========================
-
+# =========================
+# ROUTES
+# =========================
 
 @app.get("/users")
 def get_users():
@@ -511,72 +521,98 @@ def get_users():
     }
 
 
-@app.post("/delete-user")
-def delete_user(req: DeleteUserReq):
-    if req.username == "admin":
+@app.post("/register")
+def register(req: LoginReq):
+    print("REGISTER AANGEROEPEN")
+    print("USERNAME:", req.username)
+
+    try:
+        # 1. CHECK OF GEBRUIKER AL BESTAAT
+        with engine_ranya.connect() as conn:
+            exist_check = conn.execute(
+                text("SELECT TOP 1 username FROM dbo.users_ai WHERE username = :username"),
+                {"username": req.username}
+            ).mappings().first()
+
+        if exist_check:
+            return {
+                "success": False,
+                "message": "Gebruikersnaam bestaat al in de database!"
+            }
+
+        # 2. HASH WACHTWOORD EN VOEG TOE
+        hashed_password = pwd_context.hash(req.password)
+
+        with engine_ranya.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO dbo.users_ai (username, password_hash)
+                    VALUES (:username, :password)
+                """),
+                {
+                    "username": req.username,
+                    "password": hashed_password
+                }
+            )
+
         return {
-            "success": False,
-            "error": "Admin mag niet verwijderd worden"
+            "success": True, 
+            "message": "Gebruiker succesvol toegevoegd aan de database!"
         }
 
-    with engine_ranya.begin() as conn:
-        conn.execute(text("""
-            DELETE FROM dbo.users_ai
-            WHERE username = :username
-        """), {
-            "username": req.username
-        })
+    except Exception as e:
+        print("REGISTER ERROR:", str(e))
+        return {
+            "success": False,
+            "message": f"Database fout: {str(e)}"
+        }
 
-    return {"success": True}
 
+# VERWIJDER DE DUBBELE /CHAT ROUTE ONDERAAN EN HOUD ALLEEN DEZE OVER:
 @app.post("/chat")
 async def chat(req: ChatReq):
     session_id = req.session_id or "default-session"
+    print(f"Bericht ontvangen van {session_id}: {req.message}")
 
     try:
+        # Roep je LLM / AI functie aan
         ans = await run_in_threadpool(
             lambda: answer_question(
                 req.message,
                 session_id
             )
         )
-
     except Exception as e:
-        print("CHAT ERROR:")
-        print(e)
-
+        print("CHAT ERROR:", str(e))
         ans = f"Backend fout: {str(e)}"
 
-    save_chat_memory(
-        session_id,
-        req.message,
-        ans
-    )
+    # Sla het gesprek op in het geheugen
+    try:
+        save_chat_memory(
+            session_id,
+            req.message,
+            ans
+        )
+    except Exception as mem_err:
+        print("GEHEUGEN OPSLAG FOUT:", str(mem_err))
 
     return {
         "answer": ans,
         "session_id": session_id
     }
 
+
 @app.post("/login")
 def login(req: LoginReq):
-
     with engine_ranya.connect() as conn:
-
         result = conn.execute(
             text("""
-                SELECT TOP 1
-                    user_id,
-                    username,
-                    password_hash
+                SELECT TOP 1 user_id, username, password_hash
                 FROM dbo.users_ai
                 WHERE username = :username
             """),
-            {
-                "username": req.username
-            }
+            {"username": req.username}
         )
-
         user = result.mappings().first()
 
     if not user:
@@ -598,89 +634,12 @@ def login(req: LoginReq):
     }
 
 
-@app.get("/dbtest")
-def dbtest():
-
-    try:
-
-        with engine_ranya.connect() as conn:
-
-            result = conn.execute(
-                text("SELECT DB_NAME()")
-            )
-
-            return {
-                "success": True,
-                "database": result.scalar()
-            }
-
-    except Exception as e:
-
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-@app.post("/register")
-def register(req: LoginReq):
-    print("REGISTER AANGEROEPEN")
-    print("USERNAME:", req.username)
-    print("PASSWORD:", repr(req.password))
-    print("LENGTE:", len(req.password))
-
-    try:
-
-        hashed_password = pwd_context.hash(
-            req.password
-        )
-
-        with engine_ranya.begin() as conn:
-
-            conn.execute(
-                text("""
-                    INSERT INTO dbo.users_ai
-                    (
-                        username,
-                        password_hash
-                    )
-                    VALUES
-                    (
-                        :username,
-                        :password
-                    )
-                """),
-                {
-                    "username": req.username,
-                    "password": hashed_password
-                }
-            )
-
-        return {"success": True}
-
-    except Exception as e:
-
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
 @app.post("/change-password")
 def change_password(req: ChangePasswordReq):
-
     try:
-
-        print("CHANGE PASSWORD")
-        print("USERNAME:", req.username)
-        print("PASSWORD:", repr(req.password))
-        print("LENGTE:", len(req.password))
-        print("BYTES:", len(req.password.encode("utf-8")))
-
-        hashed_password = pwd_context.hash(
-            req.password
-        )
+        hashed_password = pwd_context.hash(req.password)
 
         with engine_ranya.begin() as conn:
-
             conn.execute(
                 text("""
                     UPDATE dbo.users_ai
@@ -692,56 +651,48 @@ def change_password(req: ChangePasswordReq):
                     "password": hashed_password
                 }
             )
-
-        return {
-            "success": True
-        }
-
+        return {"success": True}
     except Exception as e:
+        print("CHANGE PASSWORD ERROR:", str(e))
+        return {"success": False, "error": str(e)}
 
-        print("CHANGE PASSWORD ERROR:")
-        print(str(e))
-
-        return {
-            "success": False,
-            "error": str(e)
-        }
     
 @app.post("/delete-user")
 def delete_user(req: DeleteUserReq):
+    if req.username == "admin":
+        return {
+            "success": False,
+            "message": "Admin mag niet verwijderd worden"
+        }
 
     try:
-
         with engine_ranya.begin() as conn:
-
             conn.execute(
                 text("""
                     DELETE FROM dbo.users_ai
                     WHERE username = :username
                 """),
-                {
-                    "username": req.username
-                }
+                {"username": req.username}
             )
-
-        return {
-            "success": True
-        }
-
+        return {"success": True}
     except Exception as e:
+        print("DELETE ERROR:", str(e))
+        return {"success": False, "error": str(e)}
 
-        return {
-            "success": False,
-            "error": str(e)
-        }
-    
 
-    
+@app.get("/dbtest")
+def dbtest():
+    try:
+        with engine_ranya.connect() as conn:
+            result = conn.execute(text("SELECT DB_NAME()"))
+            return {
+                "success": True,
+                "database": result.scalar()
+            }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8000
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8000)
