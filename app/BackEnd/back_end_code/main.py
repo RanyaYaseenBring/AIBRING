@@ -14,6 +14,14 @@ from ChatBotMemory import save_chat_memory
 from track_traceFunction import handle_tracking
 from Tables import SCHEMA
 
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto"
+)
+
+
 
 app = FastAPI()
 chat_sessions = {}
@@ -38,13 +46,11 @@ app.add_middleware(
 def make_engine(server, database, username, password):
     odbc_str = (
         f"DRIVER={{ODBC Driver 18 for SQL Server}};"
-        f"SERVER=tcp:{server},1433;"
+        f"SERVER={server};"
         f"DATABASE={database};"
         f"UID={username};"
         f"PWD={password};"
-        f"Encrypt=yes;"
         f"TrustServerCertificate=yes;"
-        f"Connection Timeout=30;"
     )
 
     return create_engine(
@@ -70,7 +76,12 @@ engine_track = make_engine(
     "GB94QV4e48NH8Vz"
 )
 
-
+engine_ranya = make_engine(
+    "172.20.20.66",
+    "Test_2025",
+    "ranya",
+    "BobrKurwa1996!"
+)
 # =========================
 # OLLAMA
 # =========================
@@ -119,7 +130,6 @@ def get_user_state(session_id: str):
         chat_sessions[session_id] = create_empty_state()
 
     return chat_sessions[session_id]
-
 
 def reset_state(session_id: str):
     chat_sessions[session_id] = create_empty_state()
@@ -283,7 +293,6 @@ SELECT TOP 100
     Balance
 FROM afas.Profit_LeaveBalance
 WHERE EmployeeId = '123'
-
 
 
 GEBRUIKERSVRAAG:
@@ -450,17 +459,75 @@ def answer_question(question: str, session_id: str):
 # REQUEST MODELS
 # =========================
 
+
+# =========================
+# REQUEST MODELS
+# =========================
+
 class ChatReq(BaseModel):
     message: str
     session_id: str | None = None
 
+
 class LoginReq(BaseModel):
-    email: str
+    username: str
     password: str
+
+
+class ChangePasswordReq(BaseModel):
+    username: str
+    password: str
+
+class DeleteUserReq(BaseModel):
+    username: str
+
 
 # =========================
 # ROUTES
 # =========================
+
+
+@app.get("/users")
+def get_users():
+    with engine_ranya.connect() as conn:
+        result = conn.execute(text("""
+            SELECT user_id, username
+            FROM dbo.users_ai
+            ORDER BY user_id
+        """))
+
+        users = [
+            {
+                "user_id": row["user_id"],
+                "username": row["username"],
+                "role": "admin" if row["username"] == "admin" else "user"
+            }
+            for row in result.mappings()
+        ]
+
+    return {
+        "success": True,
+        "users": users
+    }
+
+
+@app.post("/delete-user")
+def delete_user(req: DeleteUserReq):
+    if req.username == "admin":
+        return {
+            "success": False,
+            "error": "Admin mag niet verwijderd worden"
+        }
+
+    with engine_ranya.begin() as conn:
+        conn.execute(text("""
+            DELETE FROM dbo.users_ai
+            WHERE username = :username
+        """), {
+            "username": req.username
+        })
+
+    return {"success": True}
 
 @app.post("/chat")
 async def chat(req: ChatReq):
@@ -493,13 +560,183 @@ async def chat(req: ChatReq):
 
 @app.post("/login")
 def login(req: LoginReq):
-    print(req.email)
-    print(req.password)
+
+    with engine_ranya.connect() as conn:
+
+        result = conn.execute(
+            text("""
+                SELECT TOP 1
+                    user_id,
+                    username,
+                    password_hash
+                FROM dbo.users_ai
+                WHERE username = :username
+            """),
+            {
+                "username": req.username
+            }
+        )
+
+        user = result.mappings().first()
+
+    if not user:
+        return {
+            "success": False,
+            "message": "Gebruiker bestaat niet"
+        }
+
+    if not pwd_context.verify(req.password, user["password_hash"]):
+        return {
+            "success": False,
+            "message": "Verkeerd wachtwoord"
+        }
 
     return {
-        "success": True
+        "success": True,
+        "user_id": user["user_id"],
+        "username": user["username"]
     }
 
+
+@app.get("/dbtest")
+def dbtest():
+
+    try:
+
+        with engine_ranya.connect() as conn:
+
+            result = conn.execute(
+                text("SELECT DB_NAME()")
+            )
+
+            return {
+                "success": True,
+                "database": result.scalar()
+            }
+
+    except Exception as e:
+
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/register")
+def register(req: LoginReq):
+    print("REGISTER AANGEROEPEN")
+    print("USERNAME:", req.username)
+    print("PASSWORD:", repr(req.password))
+    print("LENGTE:", len(req.password))
+
+    try:
+
+        hashed_password = pwd_context.hash(
+            req.password
+        )
+
+        with engine_ranya.begin() as conn:
+
+            conn.execute(
+                text("""
+                    INSERT INTO dbo.users_ai
+                    (
+                        username,
+                        password_hash
+                    )
+                    VALUES
+                    (
+                        :username,
+                        :password
+                    )
+                """),
+                {
+                    "username": req.username,
+                    "password": hashed_password
+                }
+            )
+
+        return {"success": True}
+
+    except Exception as e:
+
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/change-password")
+def change_password(req: ChangePasswordReq):
+
+    try:
+
+        print("CHANGE PASSWORD")
+        print("USERNAME:", req.username)
+        print("PASSWORD:", repr(req.password))
+        print("LENGTE:", len(req.password))
+        print("BYTES:", len(req.password.encode("utf-8")))
+
+        hashed_password = pwd_context.hash(
+            req.password
+        )
+
+        with engine_ranya.begin() as conn:
+
+            conn.execute(
+                text("""
+                    UPDATE dbo.users_ai
+                    SET password_hash = :password
+                    WHERE username = :username
+                """),
+                {
+                    "username": req.username,
+                    "password": hashed_password
+                }
+            )
+
+        return {
+            "success": True
+        }
+
+    except Exception as e:
+
+        print("CHANGE PASSWORD ERROR:")
+        print(str(e))
+
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    
+@app.post("/delete-user")
+def delete_user(req: DeleteUserReq):
+
+    try:
+
+        with engine_ranya.begin() as conn:
+
+            conn.execute(
+                text("""
+                    DELETE FROM dbo.users_ai
+                    WHERE username = :username
+                """),
+                {
+                    "username": req.username
+                }
+            )
+
+        return {
+            "success": True
+        }
+
+    except Exception as e:
+
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    
+
+    
 if __name__ == "__main__":
     import uvicorn
 
