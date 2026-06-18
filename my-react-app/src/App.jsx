@@ -3,27 +3,18 @@ import "./index.css";
 
 function App() {
   /* =========================
-      USERS
+      USERS STATE
   ========================= */
-  const [users, setUsers] = useState([
-    {
-      username: "admin",
-      password: "Bring123!",
-      role: "admin"
-    }
-  ]);
+  const [users, setUsers] = useState([]);
 
   /* =========================
-      PAGE STATE
+      PAGE & LOGIN STATE
   ========================= */
   const [page, setPage] = useState(() => {
     const savedLoggedIn = localStorage.getItem("loggedIn");
     return savedLoggedIn === "true" ? "chat" : "login";
   });
 
-  /* =========================
-      LOGIN STATE
-  ========================= */
   const [loggedIn, setLoggedIn] = useState(() => {
     const savedLoggedIn = localStorage.getItem("loggedIn");
     return savedLoggedIn === "true";
@@ -58,12 +49,13 @@ function App() {
   /* =========================
       BACKEND ENDPOINTS
   ========================= */
-  const BACKEND_BASE = "http://127.0.0.1:8000";
+  const BACKEND_BASE = "http://localhost:8000";
   const CHAT_URL = `${BACKEND_BASE}/chat`;
   const LOGIN_URL = `${BACKEND_BASE}/login`;
   const REGISTER_URL = `${BACKEND_BASE}/register`;
   const GET_USERS_URL = `${BACKEND_BASE}/users`;
   const DELETE_USER_URL = `${BACKEND_BASE}/delete-user`;
+  const CHANGE_PASSWORD_URL = `${BACKEND_BASE}/change-password`;
   const REQUEST_TIMEOUT_MS = 180000;
 
   /* =========================
@@ -94,7 +86,7 @@ function App() {
   }, [loggedIn, username]);
 
   /* =========================
-      LIVE GEBRUIKERS LADEN BIJ OPENEN ADMIN
+      LIVE GEBRUIKERS LADEN
   ========================= */
   useEffect(() => {
     if (page === "admin" && username === "admin") {
@@ -123,8 +115,8 @@ function App() {
       HELPERS
   ========================= */
   function cleanBotAnswer(answer) {
-    const text = (answer || "").trim();
-    return text || "Geen antwoord ontvangen.";
+    const cleanedText = (answer || "").trim();
+    return cleanedText || "Geen antwoord ontvangen.";
   }
 
   function addBot(t) {
@@ -136,7 +128,7 @@ function App() {
   }
 
   /* =========================
-      DATABASE / BACKEND ACTIES (ADMIN)
+      DATABASE / BACKEND ACTIES
   ========================= */
 
   // 1. Live gebruikers ophalen uit de DB
@@ -145,7 +137,6 @@ function App() {
       const response = await fetch(GET_USERS_URL);
       if (response.ok) {
         const data = await response.json();
-        // Verwacht een array van gebruikers, bijv: [{ username: "...", role: "..." }]
         setUsers(data.users || data); 
       } else {
         console.error("Kon gebruikers niet ophalen van server.");
@@ -155,7 +146,7 @@ function App() {
     }
   }
 
-  // 2. Gebruiker toevoegen aan DB (Inclusief check of deze al bestaat via backend response)
+  // 2. Gebruiker toevoegen aan DB
   async function handleRegisterUser() {
     setSignupError("");
     setSignupMessage("");
@@ -178,14 +169,13 @@ function App() {
         setSignupMessage(data.message || "Gebruiker succesvol toegevoegd aan de database!");
         setSignupUsername("");
         setSignupPassword("");
-        // Direct de lijst verversen met de nieuwe database-stand
         loadUsers(); 
       } else {
-        // Toon de specifieke foutmelding van de backend (bijv: "Gebruiker bestaat al")
         setSignupError(data.message || "Registratie mislukt. Gebruiker bestaat mogelijk al.");
       }
-    } catch {
-      setSignupError("Backend niet bereikbaar. Database is niet aangepast.");
+    } catch (err) {
+      console.error("Registratiefout:", err);
+      setSignupError("Netwerkfout: Backend is niet bereikbaar.");
     }
   }
 
@@ -193,23 +183,56 @@ function App() {
   async function deleteUser(usernameToDelete) {
     if (!window.confirm(`Weet je zeker dat je ${usernameToDelete} wilt verwijderen?`)) return;
 
+    setSignupError("");
+    setSignupMessage("");
+
     try {
       const response = await fetch(DELETE_USER_URL, {
-        method: "POST", // Of DELETE, afhankelijk van hoe je FastAPI/Flask route is ingesteld
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: usernameToDelete })
       });
 
       const data = await response.json().catch(() => ({}));
 
-      if (response.ok) {
-        setSignupMessage(`${usernameToDelete} succesvol verwijderd uit de database.`);
-        loadUsers(); // Ververs de lijst direct
+      if (response.ok && data.success) {
+        setSignupMessage(data.message || `${usernameToDelete} succesvol verwijderd.`);
+        loadUsers(); 
       } else {
-        setSignupError(data.message || "Kon gebruiker niet verwijderen uit de database.");
+        setSignupError(data.message || data.error || "Kon gebruiker ikke verwijderen.");
       }
-    } catch {
-      setSignupError("Backend onbereikbaar. Verwijderen mislukt.");
+    } catch (err) {
+      console.error("Verwijderfout:", err);
+      setSignupError("Netwerkfout: Verwijderen mislukt.");
+    }
+  }
+
+  // 4. Live wachtwoord wijzigen via Backend
+  async function handleChangePassword() {
+    setError("");
+    if (!username) {
+      setError("Voer eerst je gebruikersnaam in");
+      return;
+    }
+    const newPassword = prompt("Nieuw wachtwoord:");
+    if (!newPassword) return;
+
+    try {
+      const response = await fetch(CHANGE_PASSWORD_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password: newPassword })
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && data.success) {
+        alert("Wachtwoord succesvol gewijzigd in de database!");
+      } else {
+        setError(data.error || "Wachtwoord wijzigen mislukt op de server.");
+      }
+    } catch (err) {
+      console.error("Wachtwoord wijzigingsfout:", err);
+      setError("Netwerkfout: Wachtwoord kon niet worden aangepast.");
     }
   }
 
@@ -242,7 +265,7 @@ function App() {
       if (err?.name === "AbortError") {
         return "Backend duurde te lang.";
       }
-      return "Er ging iets mis.";
+      return "Er ging iets mis met het ophalen van het antwoord.";
     } finally {
       clearTimeout(timeout);
     }
@@ -336,25 +359,7 @@ function App() {
             Sign In
           </button>
 
-          <button
-            className="switch-button"
-            onClick={() => {
-              const currentUser = users.find((u) => u.username === username);
-              if (!currentUser) {
-                setError("Voer eerst je gebruikersnaam in");
-                return;
-              }
-              const newPassword = prompt("Nieuw wachtwoord:");
-              if (!newPassword) return;
-
-              setUsers((prev) =>
-                prev.map((u) =>
-                  u.username === username ? { ...u, password: newPassword } : u
-                )
-              );
-              alert("Wachtwoord aangepast!");
-            }}
-          >
+          <button className="switch-button" onClick={handleChangePassword}>
             Wachtwoord wijzigen
           </button>
         </div>
