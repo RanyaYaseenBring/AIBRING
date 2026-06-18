@@ -523,11 +523,8 @@ def get_users():
 
 @app.post("/register")
 def register(req: LoginReq):
-    print("REGISTER AANGEROEPEN")
-    print("USERNAME:", req.username)
-
+    print("REGISTER AANGEROEPEN VOOR:", req.username)
     try:
-        # 1. CHECK OF GEBRUIKER AL BESTAAT
         with engine_ranya.connect() as conn:
             exist_check = conn.execute(
                 text("SELECT TOP 1 username FROM dbo.users_ai WHERE username = :username"),
@@ -535,38 +532,22 @@ def register(req: LoginReq):
             ).mappings().first()
 
         if exist_check:
-            return {
-                "success": False,
-                "message": "Gebruikersnaam bestaat al in de database!"
-            }
+            return {"success": False, "message": "Gebruikersnaam bestaat al!"}
 
-        # 2. HASH WACHTWOORD EN VOEG TOE
         hashed_password = pwd_context.hash(req.password)
 
         with engine_ranya.begin() as conn:
             conn.execute(
                 text("""
                     INSERT INTO dbo.users_ai (username, password_hash)
-                    VALUES (:username, :password)
+                    VALUES (:username, :password_hash)
                 """),
-                {
-                    "username": req.username,
-                    "password": hashed_password
-                }
+                {"username": req.username, "password_hash": hashed_password}
             )
-
-        return {
-            "success": True, 
-            "message": "Gebruiker succesvol toegevoegd aan de database!"
-        }
-
+        return {"success": True, "message": "Gebruiker succesvol toegevoegd!"}
     except Exception as e:
         print("REGISTER ERROR:", str(e))
-        return {
-            "success": False,
-            "message": f"Database fout: {str(e)}"
-        }
-
+        return {"success": False, "message": f"Database fout: {str(e)}"}
 
 # VERWIJDER DE DUBBELE /CHAT ROUTE ONDERAAN EN HOUD ALLEEN DEZE OVER:
 @app.post("/chat")
@@ -604,35 +585,43 @@ async def chat(req: ChatReq):
 
 @app.post("/login")
 def login(req: LoginReq):
-    with engine_ranya.connect() as conn:
-        result = conn.execute(
-            text("""
-                SELECT TOP 1 user_id, username, password_hash
-                FROM dbo.users_ai
-                WHERE username = :username
-            """),
-            {"username": req.username}
-        )
-        user = result.mappings().first()
+    print("LOGIN POGING VOOR:", req.username)
+    
+    try:
+        with engine_ranya.connect() as conn:
+            # We halen ALLEEEN username en password_hash op, GEEN role!
+            user = conn.execute(
+                text("SELECT username, password_hash FROM dbo.users_ai WHERE username = :username"),
+                {"username": req.username}
+            ).mappings().first()
 
-    if not user:
+        if not user:
+            return {"success": False, "message": "Gebruikersnaam of wachtwoord onjuist."}
+
+        # Veilige check voor het wachtwoord
+        try:
+            is_valid = pwd_context.verify(req.password, user["password_hash"])
+        except Exception as hash_err:
+            print(f"Hash verificatie gecrasht voor {req.username}: {hash_err}")
+            return {"success": False, "message": "Database integriteitsfout."}
+
+        if not is_valid:
+            return {"success": False, "message": "Gebruikersnaam of wachtwoord onjuist."}
+
+        # Omdat je geen role-kolom hebt, bepalen we de rol hier in Python:
+        # Als de gebruikersnaam 'admin' is, krijgt deze de rol 'admin', anders 'user'.
+        user_role = "admin" if user["username"].lower() == "admin" else "user"
+
         return {
-            "success": False,
-            "message": "Gebruiker bestaat niet"
+            "success": True,
+            "username": user["username"],
+            "role": user_role,  # De frontend krijgt hiermee netjes een rol doorgestuurd
+            "message": "Succesvol ingelogd!"
         }
 
-    if not pwd_context.verify(req.password, user["password_hash"]):
-        return {
-            "success": False,
-            "message": "Verkeerd wachtwoord"
-        }
-
-    return {
-        "success": True,
-        "user_id": user["user_id"],
-        "username": user["username"]
-    }
-
+    except Exception as e:
+        print("LOGIN ALGEMENE ERROR:", str(e))
+        return {"success": False, "message": f"Serverfout tijdens inloggen: {str(e)}"}
 
 @app.post("/change-password")
 def change_password(req: ChangePasswordReq):
